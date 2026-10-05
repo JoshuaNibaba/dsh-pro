@@ -1,18 +1,24 @@
 #!/usr/bin/env bash
 # DSH Remote server installer for Debian/Ubuntu. Run as root; safe to re-run.
-#
-#   install.sh [options]
-#
-#   --domain NAME          also publish dsh at https://NAME/ behind a password login
-#   --tls MODE             letsencrypt (default) | selfsigned (e.g. behind Cloudflare "Full") | none (plain HTTP, not recommended)
-#   --email ADDR           Let's Encrypt account e-mail (optional)
-#   --password PW          set the browser password (default: keep the existing one, or generate one)
-#   --workdir DIR          dsh working directory (default /home/dsh/workspace)
-#   --dsh-version VER      npm version or tag of @deepseek-ai/dsh (default latest)
-#   --no-copy-root-keys    do not copy root's SSH authorized_keys to the dsh user
-#
-# Without --domain, dsh is reachable only through SSH tunnels (DSH Remote's SSH mode).
 set -euo pipefail
+
+usage() {
+  cat <<'EOF'
+DSH Remote server installer for Debian/Ubuntu. Run as root; safe to re-run.
+
+  install.sh [options]
+
+  --domain NAME          also publish dsh at https://NAME/ behind a password login
+  --tls MODE             letsencrypt (default) | selfsigned (e.g. behind Cloudflare "Full") | none (plain HTTP, not recommended)
+  --email ADDR           Let's Encrypt account e-mail (optional)
+  --password PW          set the browser password (default: keep the existing one, or generate one)
+  --workdir DIR          dsh working directory (default /home/dsh/workspace)
+  --dsh-version VER      npm version or tag of @deepseek-ai/dsh (default latest)
+  --no-copy-root-keys    do not copy root's SSH authorized_keys to the dsh user
+
+Without --domain, dsh is reachable only through SSH tunnels (DSH Remote's SSH mode).
+EOF
+}
 
 REPO="${DSH_REMOTE_REPO:-JoshuaNibaba/dsh-remote-mac}"
 DOMAIN="" TLS="letsencrypt" EMAIL="" PASSWORD="" WORKDIR="/home/dsh/workspace" DSH_VERSION="latest" COPY_KEYS=1
@@ -26,7 +32,7 @@ while [ $# -gt 0 ]; do
     --workdir) WORKDIR="$2"; shift 2 ;;
     --dsh-version) DSH_VERSION="$2"; shift 2 ;;
     --no-copy-root-keys) COPY_KEYS=0; shift ;;
-    -h|--help) sed -n '2,16p' "$0"; exit 0 ;;
+    -h|--help) usage; exit 0 ;;
     *) echo "unknown option: $1" >&2; exit 2 ;;
   esac
 done
