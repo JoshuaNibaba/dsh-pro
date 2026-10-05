@@ -1,0 +1,80 @@
+#!/usr/bin/env bash
+# Command-line companion of DSH Remote. Reads the app's settings
+# (defaults domain com.joshua.dsh-remote) unless overridden by environment:
+#   DSH_REMOTE_SERVER, DSH_REMOTE_SSH_PORT, DSH_REMOTE_SSH_USER, DSH_LOCAL_PORT
+set -euo pipefail
+
+pref() { defaults read com.joshua.dsh-remote "$1" 2>/dev/null || true; }
+SERVER="${DSH_REMOTE_SERVER:-$(pref server)}"
+SSH_PORT="${DSH_REMOTE_SSH_PORT:-$(pref sshPort)}"
+SSH_USER="${DSH_REMOTE_SSH_USER:-$(pref sshUser)}"
+REMOTE_PORT="${DSH_REMOTE_PORT:-18790}"
+LOCAL_PORT="${DSH_LOCAL_PORT:-18790}"
+SERVICE="dsh-web"
+APP_REPO="${DSH_REMOTE_APP_REPO:-JoshuaNibaba/dsh-remote-mac}"
+APP_DIR="$HOME/Applications/DSH Remote.app"
+CTL="${TMPDIR:-/tmp}/dsh-remote-${LOCAL_PORT}.ctl"
+
+need_server() { [ -n "$SERVER" ] || { echo "dsh-remote: 未配置服务器;在 DSH Remote 设置中填写,或设置 DSH_REMOTE_SERVER" >&2; exit 1; }; }
+dest() { if [ -n "$SSH_USER" ] && [[ "$SERVER" != *@* ]]; then echo "$SSH_USER@$SERVER"; else echo "$SERVER"; fi; }
+ssh_opts() { [ -n "$SSH_PORT" ] && [ "$SSH_PORT" != 0 ] && echo "-p $SSH_PORT"; true; }
+rssh() { need_server; ssh $(ssh_opts) "$(dest)" "$@"; }
+
+tunnel_up() { ssh -S "$CTL" -O check "$(dest)" >/dev/null 2>&1; }
+start_tunnel() {
+  need_server
+  tunnel_up && return
+  ssh $(ssh_opts) -f -N -M -S "$CTL" -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 \
+    -L "127.0.0.1:${LOCAL_PORT}:127.0.0.1:${REMOTE_PORT}" "$(dest)"
+}
+stop_tunnel() {
+  if tunnel_up; then ssh -S "$CTL" -O exit "$(dest)" >/dev/null 2>&1 || true; echo "tunnel closed"; else echo "tunnel not running"; fi
+}
+remote_token() {
+  rssh 'f=~dsh/.dsh-remote/url; if [ -s "$f" ]; then cat "$f"; else { sudo -n journalctl -u dsh-web -o cat --no-pager -n 200 2>/dev/null || journalctl -u dsh-web -o cat --no-pager -n 200; } | grep -o "dsh web: http[^ ]*" | tail -1 | cut -d" " -f3; fi' \
+    | sed -nE 's/.*[?&]token=([^&]*).*/\1/p'
+}
+local_url() {
+  local t; t="$(remote_token)"
+  [ -n "$t" ] || { echo "dsh-remote: 服务尚未输出访问地址;试试 dsh-remote logs" >&2; exit 1; }
+  echo "http://127.0.0.1:${LOCAL_PORT}/?token=$t"
+}
+
+update_app() {
+  local tmp; tmp="$(mktemp -d)"
+  curl -fsSL "https://github.com/$APP_REPO/releases/latest/download/DSH-Remote.zip" -o "$tmp/DSH-Remote.zip"
+  ditto -x -k "$tmp/DSH-Remote.zip" "$tmp"
+  xattr -dr com.apple.quarantine "$tmp/DSH Remote.app" 2>/dev/null || true
+  local was_running=0
+  if pgrep -xq DSHRemote; then was_running=1; osascript -e 'quit app "DSH Remote"'; sleep 2; fi
+  mkdir -p "$HOME/Applications"
+  rm -rf "$APP_DIR"
+  mv "$tmp/DSH Remote.app" "$APP_DIR"
+  rm -rf "$tmp"
+  echo "已安装 DSH Remote $(defaults read "$APP_DIR/Contents/Info.plist" CFBundleShortVersionString)"
+  [ "$was_running" = 1 ] && open "$APP_DIR"
+  return 0
+}
+
+case "${1:-open}" in
+  open)       start_tunnel; open "$(local_url)" ;;
+  tunnel)     start_tunnel; echo "tunnel: http://127.0.0.1:${LOCAL_PORT}/" ;;
+  url)        local_url ;;
+  close)      stop_tunnel ;;
+  status)     tunnel_up && echo "tunnel: up" || echo "tunnel: down"; rssh "systemctl is-active $SERVICE dsh-gateway 2>/dev/null; dsh --version" ;;
+  logs)       rssh "sudo -n journalctl -u $SERVICE -o cat --no-pager -n 200 2>/dev/null || journalctl -u $SERVICE -o cat --no-pager -n 200" | tail -n "${2:-50}" | sed 's/token=[^ ]*/token=<redacted>/' ;;
+  restart)    rssh "sudo -n systemctl restart $SERVICE 2>/dev/null || systemctl restart $SERVICE"; echo "restarted" ;;
+  update)     rssh "sudo -n /usr/local/sbin/dsh-update ${2:-latest} 2>/dev/null || /usr/local/sbin/dsh-update ${2:-latest}" ;;
+  ssh)        need_server; exec ssh -t $(ssh_opts) "$(dest)" ;;
+  update-app) update_app ;;
+  *) cat <<EOF
+usage: dsh-remote [open|tunnel|url|close|status|logs [N]|restart|update [version]|update-app|ssh]
+  open        SSH 隧道 + 在浏览器中打开 dsh(默认)
+  close       关闭隧道
+  update      升级服务器上的 dsh
+  update-app  下载并安装最新的 DSH Remote.app
+  ssh         登录服务器
+server: ${SERVER:-<未配置>}  ssh port: ${SSH_PORT:-default}  ssh user: ${SSH_USER:-default}
+EOF
+     exit 2 ;;
+esac
