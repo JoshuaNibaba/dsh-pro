@@ -29,29 +29,29 @@ enum Updater {
         NSError(domain: "update", code: 1, userInfo: [NSLocalizedDescriptionKey: msg])
     }
 
-    /// Fetches the latest release; completes on the main queue.
+    /// Fetches the latest release; completes on the main queue. Uses the
+    /// github.com/<repo>/releases/latest redirect to the newest tag rather than
+    /// the REST API, whose anonymous limit is shared by everyone behind one IP.
     static func latest(_ done: @escaping (Result<Release, Error>) -> Void) {
         guard let repo else { return done(.failure(fail("此版本未配置更新源(DSHRemoteUpdateRepo)"))) }
-        var req = URLRequest(url: URL(string: "https://api.github.com/repos/\(repo)/releases/latest")!)
-        req.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
-        req.setValue("DSH-Remote/\(currentBuild)", forHTTPHeaderField: "User-Agent")
+        var req = URLRequest(url: URL(string: "https://github.com/\(repo)/releases/latest")!)
+        req.httpMethod = "HEAD"
         req.cachePolicy = .reloadIgnoringLocalCacheData
-        URLSession.shared.dataTask(with: req) { data, resp, err in
+        req.setValue("DSH-Remote/\(currentBuild)", forHTTPHeaderField: "User-Agent")
+        URLSession.shared.dataTask(with: req) { _, resp, err in
             let result: Result<Release, Error> = Result {
                 if let err { throw err }
-                guard let http = resp as? HTTPURLResponse, http.statusCode == 200, let data,
-                      let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-                      let tag = json["tag_name"] as? String else {
+                guard let http = resp as? HTTPURLResponse, http.statusCode == 200, let final = http.url,
+                      final.path.contains("/releases/tag/") else {
                     throw fail("无法读取 \(repo) 的最新版本(HTTP \((resp as? HTTPURLResponse)?.statusCode ?? 0))")
                 }
-                let assets = json["assets"] as? [[String: Any]] ?? []
-                guard let asset = assets.first(where: { $0["name"] as? String == "DSH-Remote.zip" }),
-                      let urlString = asset["browser_download_url"] as? String, let zip = URL(string: urlString) else {
-                    throw fail("最新版本 \(tag) 中没有 DSH-Remote.zip")
+                let tag = final.lastPathComponent
+                guard tag.hasPrefix("v"), let build = Int(tag.split(separator: ".").last ?? "") else {
+                    throw fail("无法识别的版本标签 \(tag)")
                 }
-                let build = Int(tag.split(separator: ".").last ?? "") ?? 0
-                return Release(build: build, version: String(tag.drop(while: { $0 == "v" })),
-                               zip: zip, notes: json["body"] as? String ?? "")
+                let zip = URL(string: "https://github.com/\(repo)/releases/download/\(tag)/DSH-Remote.zip")!
+                return Release(build: build, version: String(tag.dropFirst()), zip: zip,
+                               notes: "https://github.com/\(repo)/releases/tag/\(tag)")
             }
             DispatchQueue.main.async { done(result) }
         }.resume()
