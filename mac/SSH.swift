@@ -96,6 +96,40 @@ final class Tunnel {
         return false
     }
 
+    /// Stops an `ssh -L 127.0.0.1:<port>:` left behind by a previous instance that
+    /// did not exit cleanly. Other listeners on the port are left alone.
+    /// - Returns: true when an orphaned tunnel was stopped.
+    @discardableResult
+    static func reclaimOrphan(port: Int) -> Bool {
+        let lsof = Process()
+        lsof.executableURL = URL(fileURLWithPath: "/usr/sbin/lsof")
+        lsof.arguments = ["-nP", "-iTCP:\(port)", "-sTCP:LISTEN", "-t"]
+        let out = Pipe()
+        lsof.standardOutput = out
+        lsof.standardError = FileHandle.nullDevice
+        guard (try? lsof.run()) != nil else { return false }
+        let pids = (String(data: out.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? "")
+            .split(separator: "\n").compactMap { Int32($0) }
+        lsof.waitUntilExit()
+        var reclaimed = false
+        for pid in pids {
+            let ps = Process()
+            ps.executableURL = URL(fileURLWithPath: "/bin/ps")
+            ps.arguments = ["-o", "command=", "-p", String(pid)]
+            let psOut = Pipe()
+            ps.standardOutput = psOut
+            guard (try? ps.run()) != nil else { continue }
+            let cmd = String(data: psOut.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+            ps.waitUntilExit()
+            if cmd.hasPrefix("/usr/bin/ssh ") && cmd.contains("-L 127.0.0.1:\(port):") {
+                kill(pid, SIGTERM)
+                reclaimed = true
+            }
+        }
+        if reclaimed { Thread.sleep(forTimeInterval: 0.5) }
+        return reclaimed
+    }
+
     static func canConnect(port: Int) -> Bool {
         let fd = socket(AF_INET, SOCK_STREAM, 0)
         guard fd >= 0 else { return false }

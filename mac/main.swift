@@ -126,6 +126,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         DispatchQueue.global().async {
             let result: Result<URL, Error> = Result {
                 let url = try self.fetchLoginURL(s)
+                if !self.tunnel.isRunning && Tunnel.canConnect(port: s.localPort) && Tunnel.reclaimOrphan(port: s.localPort) {
+                    log("stopped an orphaned tunnel on port \(s.localPort)")
+                }
                 if Tunnel.canConnect(port: s.localPort) && !self.tunnel.isRunning {
                     throw NSError(domain: "dsh", code: 1, userInfo: [NSLocalizedDescriptionKey:
                         "本地端口 \(s.localPort) 已被其他程序占用。\n可执行: defaults write com.joshua.dsh-remote localPort -int <端口>"])
