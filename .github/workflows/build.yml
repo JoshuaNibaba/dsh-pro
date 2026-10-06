@@ -21,6 +21,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Test theme integration
+        run: |
+          node --test mac/tests/chrome.test.mjs
+          xcrun swiftc -swift-version 5 -framework AppKit -framework WebKit \
+            mac/Chrome.swift mac/tests/ChromeTests.swift -o "$RUNNER_TEMP/dsh-chrome-tests"
+          "$RUNNER_TEMP/dsh-chrome-tests"
+
       - name: Build
         env:
           BUILD_NUMBER: ${{ github.run_number }}

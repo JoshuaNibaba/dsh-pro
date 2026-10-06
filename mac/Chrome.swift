@@ -3,8 +3,8 @@
 // The title bar is transparent, so it shows the window background, and a page
 // script reports the page's background color: dsh publishes it in
 // <meta name="theme-color"> after every theme change (light, dark, or a custom
-// theme). The window takes that color and a light or dark appearance by its
-// luminance, so the title text and traffic lights stay legible.
+// theme). The window follows the page's theme source: system inherits macOS
+// appearance, while fixed themes use their resolved light or dark scheme.
 //
 // The page is deliberately not marked as the DSH desktop shell
 // (<html data-platform>): dsh then expects the Electron preload bridges, and
@@ -25,21 +25,24 @@ final class WeakScriptHandler: NSObject, WKScriptMessageHandler {
 enum Chrome {
     static let handlerName = "dshChrome"
 
-    /// Runs at document start in the main frame; reports each theme-color change.
+    /// Runs at document start in the main frame; reports background and theme-source changes.
     static let script = """
     (function () {
       var sent = null;
       function report() {
         var meta = document.querySelector('meta[name="theme-color"]');
         var color = meta && meta.content;
+        var source = document.documentElement.getAttribute('data-ds-theme-source');
         if (!color && document.body) color = getComputedStyle(document.body).backgroundColor;
-        if (color && color !== sent) {
-          sent = color;
-          window.webkit.messageHandlers.\(handlerName).postMessage({ color: color });
+        var key = JSON.stringify([color, source]);
+        if (color && key !== sent) {
+          sent = key;
+          window.webkit.messageHandlers.\(handlerName).postMessage({ color: color, source: source });
         }
       }
       new MutationObserver(report).observe(document.documentElement,
-        { subtree: true, childList: true, attributes: true, attributeFilter: ['content', 'data-ds-dark-theme'] });
+        { subtree: true, childList: true, attributes: true,
+          attributeFilter: ['content', 'data-ds-dark-theme', 'data-ds-theme-source'] });
       document.addEventListener('DOMContentLoaded', report);
       window.addEventListener('load', report);
     })();
@@ -57,13 +60,20 @@ enum Chrome {
         window.titlebarAppearsTransparent = true
     }
 
-    /// Applies one page message: `{ color: "rgb(…)" | "#rrggbb" }`.
+    /// Applies the page background and theme source; older pages fall back to color luminance.
     static func handle(_ body: Any, window: NSWindow) {
-        guard let text = (body as? [String: Any])?["color"] as? String, let color = parse(text) else { return }
+        guard let message = body as? [String: Any], let text = message["color"] as? String,
+              let color = parse(text) else { return }
         window.backgroundColor = color
-        let rgb = color.usingColorSpace(.sRGB) ?? color
-        let luminance = 0.2126 * rgb.redComponent + 0.7152 * rgb.greenComponent + 0.0722 * rgb.blueComponent
-        window.appearance = NSAppearance(named: luminance < 0.5 ? .darkAqua : .aqua)
+        switch message["source"] as? String {
+        case "system": window.appearance = nil
+        case "light": window.appearance = NSAppearance(named: .aqua)
+        case "dark": window.appearance = NSAppearance(named: .darkAqua)
+        default:
+            let rgb = color.usingColorSpace(.sRGB) ?? color
+            let luminance = 0.2126 * rgb.redComponent + 0.7152 * rgb.greenComponent + 0.0722 * rgb.blueComponent
+            window.appearance = NSAppearance(named: luminance < 0.5 ? .darkAqua : .aqua)
+        }
     }
 
     /// Parses `rgb(r, g, b)`, `rgba(r, g, b, a)` (opaque only) and `#rrggbb`.
