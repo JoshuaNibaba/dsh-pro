@@ -30,6 +30,8 @@ curl -fsSL https://raw.githubusercontent.com/JoshuaNibaba/dsh-remote-mac/main/se
 
 升级服务器上的 dsh:`dsh-update [版本]`(root),或以 `dsh` 用户运行 `sudo dsh-update [版本]`;版本只接受 npm 版本号或标签。
 
+运行自己修改过的 dsh:让 `~dsh/.dsh-remote/dsh-bin` 指向自建版本的 `apps/cli/lib/bin.js` 并重启 `dsh-web`,删除该链接即回到 npm 版本。在官方版本之上维护修改的一套做法(分支结构、同步、构建、部署脚本)见 DeepSeek Harness 源码中 `custom` 分支的 `.custom/README.md`。
+
 域名经 Cloudflare 代理时,SSL 模式 Full 和 Flexible 都可以用(nginx 只信任 Cloudflare 官方 IP 段发来的 `X-Forwarded-Proto` 和 `CF-Connecting-IP`)。建议用 Full:Flexible 下 Cloudflare 到服务器这一段是明文 HTTP。
 
 > dsh 能在服务器上执行任意命令。开放网页访问时请使用足够长的密码,并始终使用 HTTPS。网关对密码错误有限流(同一 IP 连续 5 次错误锁定 15 分钟)。
