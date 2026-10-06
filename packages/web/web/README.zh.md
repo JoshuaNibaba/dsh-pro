@@ -50,7 +50,7 @@ kind: "package-reference"
 
 ### 搜索与抓取
 
-`search()` 执行一次查询，返回可选的提供方答案与可引用的来源列表；服务强制执行 `request.maxResults`：截断 `sources[]` 并设置 `truncated`。`fetch()` 获取一个 URL，返回其最终 URL、状态码、解码后的正文与截断标志；非 2xx 响应是结果，不是错误。
+`search()` 执行一次查询，返回可选的提供方答案与可引用的来源列表；服务强制执行 `request.maxResults`：截断 `sources[]` 并设置 `truncated`。可选的第三个参数 `providerId` 在该次调用中替换配置的搜索提供方，适用同样的已配置 id 规则，使一个提供方可以委托给另一个。`fetch()` 获取一个 URL，返回其最终 URL、状态码、解码后的正文与截断标志；非 2xx 响应是结果，不是错误。
 
 ```text
 // Search the web; sources[] is capped to maxResults:

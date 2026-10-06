@@ -472,8 +472,19 @@
     - id: web
       name: '@deepseek-ai/dsh-web'
       config:
-        searchProvider: deepseek-official
+        searchProvider: model-native
         fetchProvider: http
+
+    # Custom: search with the server-side search tool of the conversation's own
+    # model route, as Claude Code's WebSearch does. DeepSeek routes delegate to the
+    # DeepSeek native search below; other routes without native search fail.
+    - id: web-search-model
+      name: '@deepseek-ai/dsh-web-search-model'
+      config:
+        delegates:
+          deepseek-official: deepseek-official
+          deepseek-account: deepseek-official
+          deepseek: deepseek-official
 
     - id: web-search-deepseek
       name: '@deepseek-ai/dsh-web-search-deepseek'

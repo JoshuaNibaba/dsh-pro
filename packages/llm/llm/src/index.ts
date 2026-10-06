@@ -40,8 +40,11 @@ import {
   contentHasFile, contentHasImage, fileHandleText, projectFilesToText, projectImagesForTextModel, projectToolUpdates,
 } from './content.ts'
 import type { FileAttachmentRef } from '@deepseek-ai/dsh-attachment'
+import { WEB_SEARCH_UNSUPPORTED_CODE } from './web-search.ts'
+import type { LlmWebSearchRequest, LlmWebSearchResult } from './web-search.ts'
 
 export * from './attribution.ts'
+export * from './web-search.ts'
 export * from './brand.ts'
 export * from './error.ts'
 export * from './api-key.ts'
@@ -280,6 +283,20 @@ export abstract class LlmAdapter {
       model: await this.resolveModel(provider, model, signal),
       stream: options => this.stream(options),
     }
+  }
+
+  /**
+   * Run one native web search as an auxiliary request on an owned route. The
+   * default rejects with {@link WEB_SEARCH_UNSUPPORTED_CODE}; adapters whose
+   * protocol carries a server-side search tool override it.
+   * @param request - route, model, query, cancellation, and request observer.
+   * @returns the provider's commentary and links in response order.
+   */
+  webSearch(request: LlmWebSearchRequest): Promise<LlmWebSearchResult> {
+    return Promise.reject(new LlmError(
+      `provider "${request.provider}" does not support native web search`,
+      WEB_SEARCH_UNSUPPORTED_CODE,
+    ))
   }
 
   /**
@@ -675,6 +692,17 @@ export class LlmRuntime extends TypertRemoteService {
    */
   imageRequestPricing(provider: string, model: string): LlmImageRequestPricing | undefined {
     return this.adapters.get(provider)?.adapter.imageRequestPricing(provider, model)
+  }
+
+  /**
+   * Run one native web search through the adapter that owns the request's
+   * route. Fails with `NO_ADAPTER` for an unregistered route and with
+   * {@link WEB_SEARCH_UNSUPPORTED_CODE} when the route has no native search.
+   * @param request - route, model, query, cancellation, and request observer.
+   * @returns the provider's commentary and links in response order.
+   */
+  async webSearch(request: LlmWebSearchRequest): Promise<LlmWebSearchResult> {
+    return this.registration(request.provider).adapter.webSearch(request)
   }
 
   /**

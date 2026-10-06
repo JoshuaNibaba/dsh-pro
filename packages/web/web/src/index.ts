@@ -135,12 +135,15 @@ export class WebRuntime extends Service {
    * if the provider over-returns, `sources[]` is truncated and `truncated` set.
    * @param request - the query and optional result limit.
    * @param signal - optional cancellation signal forwarded to the provider.
+   * @param providerId - provider id that replaces the configured selection for
+   *   this call; the configured-id rules apply to it.
    * @returns the provider's results, capped to `request.maxResults`.
    */
-  async search(request: WebSearchRequest, signal?: AbortSignal): Promise<WebSearchResult> {
+  async search(request: WebSearchRequest, signal?: AbortSignal, providerId?: string): Promise<WebSearchResult> {
+    const configuredId = providerId ?? this.searchProviderId
     const provider = resolveProvider({
       providers: this.searchProviders,
-      ...this.searchProviderId !== undefined ? { configuredId: this.searchProviderId } : {},
+      ...configuredId !== undefined ? { configuredId } : {},
     })
     const result = await provider.search(request, signal)
     return capSources(result, request.maxResults)

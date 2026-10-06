@@ -4223,6 +4223,28 @@ export interface Config {
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-web-search-exa -->
 
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-web-search-model -->
+<a id="deepseek-aidsh-web-search-model"></a>
+
+## `@deepseek-ai/dsh-web-search-model`
+
+- `inject`: `web`
+- `source`: [`packages/web/web-search-model/src/index.ts:24`](../packages/web/web-search-model/src/index.ts)
+
+```ts config-catalog
+/** Plugin config. */
+export interface Config {
+  /** Search model id per provider route; a route absent here searches with the conversation's model. */
+  models: Record<string, string>
+  /**
+   * Search provider id per provider route, for routes whose native search
+   * another registered provider serves (DeepSeek routes use `deepseek-official`).
+   */
+  delegates: Record<string, string>
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-web-search-model -->
+
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-web-search-perplexity -->
 <a id="deepseek-aidsh-web-search-perplexity"></a>
 

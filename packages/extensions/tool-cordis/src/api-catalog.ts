@@ -1422,6 +1422,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the owning adapter\'s image pricing for the route, when declared.',
       },
       {
+        signature: 'async webSearch(request: LlmWebSearchRequest): Promise<LlmWebSearchResult>',
+        description: 'Run one native web search through the adapter that owns the request\'s route. Fails with `NO_ADAPTER` for an unregistered route and with WEB_SEARCH_UNSUPPORTED_CODE when the route has no native search.',
+        parameters: [{ name: 'request', description: 'route, model, query, cancellation, and request observer.' }],
+        returns: 'the provider\'s commentary and links in response order.',
+      },
+      {
         signature: 'fileRequestText(ref: FileAttachmentRef): string',
         description: 'Resolve the exact text one durable file occurrence contributes to every provider request in the current execution environment.',
         parameters: [{ name: 'ref', description: 'durable verbatim file reference from model history.' }],
@@ -3455,9 +3461,9 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the disposer that unregisters the provider.',
       },
       {
-        signature: 'async search(request: WebSearchRequest, signal?: AbortSignal): Promise<WebSearchResult>',
+        signature: 'async search(request: WebSearchRequest, signal?: AbortSignal, providerId?: string): Promise<WebSearchResult>',
         description: 'Run one search through the selected provider. Resolves the provider at call time with the selection rules above; throws WebError when the capability cannot run. The seam enforces `request.maxResults` on the result: if the provider over-returns, `sources[]` is truncated and `truncated` set.',
-        parameters: [{ name: 'request', description: 'the query and optional result limit.' }, { name: 'signal', description: 'optional cancellation signal forwarded to the provider.' }],
+        parameters: [{ name: 'request', description: 'the query and optional result limit.' }, { name: 'signal', description: 'optional cancellation signal forwarded to the provider.' }, { name: 'providerId', description: 'provider id that replaces the configured selection for this call; the configured-id rules apply to it.' }],
         returns: 'the provider\'s results, capped to `request.maxResults`.',
       },
       {
@@ -5575,7 +5581,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'LlmAdapter',
-    declaration: 'export abstract class LlmAdapter {\n    providerInfo(provider: string): LlmProviderInfo;\n    providerRetryPolicy(_provider: string): ResolvedRetryPolicy | undefined;\n    imageRequestPricing(_provider: string, _model: string): LlmImageRequestPricing | undefined;\n    listModels(_provider: string): Promise<readonly LlmModelInfo[]>;\n    resolveModel(provider: string, model: string, _signal?: AbortSignal): Promise<LlmResolvedModelInfo>;\n    async prepareCall(provider: string, model: string, signal?: AbortSignal): Promise<PreparedAdapterCall>;\n    abstract stream(options: GenerateOptions): AsyncIterable<StreamChunk>;\n}',
+    declaration: 'export abstract class LlmAdapter {\n    providerInfo(provider: string): LlmProviderInfo;\n    providerRetryPolicy(_provider: string): ResolvedRetryPolicy | undefined;\n    imageRequestPricing(_provider: string, _model: string): LlmImageRequestPricing | undefined;\n    listModels(_provider: string): Promise<readonly LlmModelInfo[]>;\n    resolveModel(provider: string, model: string, _signal?: AbortSignal): Promise<LlmResolvedModelInfo>;\n    async prepareCall(provider: string, model: string, signal?: AbortSignal): Promise<PreparedAdapterCall>;\n    webSearch(request: LlmWebSearchRequest): Promise<LlmWebSearchResult>;\n    abstract stream(options: GenerateOptions): AsyncIterable<StreamChunk>;\n}',
   },
   {
     name: 'LlmAttemptId',
@@ -5639,7 +5645,27 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'LlmRuntime',
-    declaration: 'export class LlmRuntime extends TypertRemoteService {\n    constructor(ctx: Context);\n    registerAdapter(providers: string[], adapter: LlmAdapter): AdapterRegistrationHandle;\n    @Remote\n    listProviders(): LlmProviderInfo[];\n    registerConfigurableProviders(entries: readonly LlmConfigurableProvider[]): DirectoryRegistrationHandle;\n    @Remote\n    listConfigurableProviders(): LlmConfigurableProvider[];\n    registerModelDiscovery(settingsNs: string, discover: (request: LlmModelDiscoveryRequest, signal?: AbortSignal) => Promise<readonly LlmDiscoveredModel[]>): () => void;\n    async discoverModels(settingsNs: string, request: LlmModelDiscoveryRequest, signal?: AbortSignal): Promise<LlmDiscoveredModel[]>;\n    @Remote(\'discoverModels\')\n    async remoteDiscoverModels(settingsNs: string, request: LlmModelDiscoveryRequest, signal: AbortSignal): Promise<LlmDiscoveredModel[]>;\n    providerRetryPolicy(provider: string): ResolvedRetryPolicy;\n    imageRequestPricing(provider: string, model: string): LlmImageRequestPricing | undefined;\n    fileRequestText(ref: FileAttachmentRef): string;\n    async listModels(provider: string): Promise<LlmModelInfo[]>;\n    async resolveModelInfo(provider: string, model: string, signal?: AbortSignal): Promise<LlmResolvedModelInfo>;\n    async resolveCallConfig(config: LlmCallConfig, signal?: AbortSignal): Promise<LlmCallConfig>;\n    async prepareCall(config: LlmCallConfig, signal?: AbortSignal): Promise<PreparedLlmCall>;\n    stream(options: GenerateOptions) /* …truncated — full shape in source */',
+    declaration: 'export class LlmRuntime extends TypertRemoteService {\n    constructor(ctx: Context);\n    registerAdapter(providers: string[], adapter: LlmAdapter): AdapterRegistrationHandle;\n    @Remote\n    listProviders(): LlmProviderInfo[];\n    registerConfigurableProviders(entries: readonly LlmConfigurableProvider[]): DirectoryRegistrationHandle;\n    @Remote\n    listConfigurableProviders(): LlmConfigurableProvider[];\n    registerModelDiscovery(settingsNs: string, discover: (request: LlmModelDiscoveryRequest, signal?: AbortSignal) => Promise<readonly LlmDiscoveredModel[]>): () => void;\n    async discoverModels(settingsNs: string, request: LlmModelDiscoveryRequest, signal?: AbortSignal): Promise<LlmDiscoveredModel[]>;\n    @Remote(\'discoverModels\')\n    async remoteDiscoverModels(settingsNs: string, request: LlmModelDiscoveryRequest, signal: AbortSignal): Promise<LlmDiscoveredModel[]>;\n    providerRetryPolicy(provider: string): ResolvedRetryPolicy;\n    imageRequestPricing(provider: string, model: string): LlmImageRequestPricing | undefined;\n    async webSearch(request: LlmWebSearchRequest): Promise<LlmWebSearchResult>;\n    fileRequestText(ref: FileAttachmentRef): string;\n    async listModels(provider: string): Promise<LlmModelInfo[]>;\n    async resolveModelInfo(provider: string, model: string, signal?: AbortSignal): Promise<LlmResolvedModelInfo>;\n    async resolveCallConfig(config: LlmCallConfig, signal?: AbortSignal): Promise<LlmCallConfig>;\n    async prepareCall(config: LlmCallConfig, signa /* …truncated — full shape in source */',
+  },
+  {
+    name: 'LlmWebSearchLink',
+    declaration: 'export interface LlmWebSearchLink {\n    readonly url: string;\n    readonly title?: string;\n}',
+  },
+  {
+    name: 'LlmWebSearchRequest',
+    declaration: 'export interface LlmWebSearchRequest {\n    readonly provider: string;\n    readonly model: string;\n    readonly query: string;\n    readonly signal?: AbortSignal;\n    readonly onRequest?: (record: LlmWebSearchRequestRecord) => void;\n}',
+  },
+  {
+    name: 'LlmWebSearchRequestRecord',
+    declaration: 'export interface LlmWebSearchRequestRecord {\n    provider: string;\n    model: string;\n    api: string;\n    body: JsonValue;\n}',
+  },
+  {
+    name: 'LlmWebSearchResult',
+    declaration: 'export interface LlmWebSearchResult {\n    readonly segments: readonly LlmWebSearchSegment[];\n    readonly searchCount: number;\n}',
+  },
+  {
+    name: 'LlmWebSearchSegment',
+    declaration: 'export type LlmWebSearchSegment = {\n    readonly type: \'text\';\n    readonly text: string;\n} | {\n    readonly type: \'links\';\n    readonly links: readonly LlmWebSearchLink[];\n} | {\n    readonly type: \'error\';\n    readonly code: string;\n};',
   },
   {
     name: 'LocalAtInput',

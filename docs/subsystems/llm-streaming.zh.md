@@ -1017,6 +1017,15 @@ providerRetryPolicy(provider: string): ResolvedRetryPolicy
 imageRequestPricing(provider: string, model: string): LlmImageRequestPricing | undefined
 
 /**
+ * Run one native web search through the adapter that owns the request's
+ * route. Fails with `NO_ADAPTER` for an unregistered route and with
+ * {@link WEB_SEARCH_UNSUPPORTED_CODE} when the route has no native search.
+ * @param request - route, model, query, cancellation, and request observer.
+ * @returns the provider's commentary and links in response order.
+ */
+async webSearch(request: LlmWebSearchRequest): Promise<LlmWebSearchResult>
+
+/**
  * Resolve the exact text one durable file occurrence contributes to every
  * provider request in the current execution environment.
  * @param ref - durable verbatim file reference from model history.

@@ -50,7 +50,7 @@ The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-a
 
 ### Searching and fetching
 
-`search()` runs one query and returns an optional provider answer plus a list of citeable sources; the service enforces `request.maxResults` by truncating `sources[]` and setting `truncated`. `fetch()` retrieves one URL and returns its final URL, status code, decoded body, and a truncation flag; a non-2xx response is a result, not an error.
+`search()` runs one query and returns an optional provider answer plus a list of citeable sources; the service enforces `request.maxResults` by truncating `sources[]` and setting `truncated`. An optional third `providerId` argument replaces the configured search provider for that call under the same configured-id rules, which lets one provider delegate to another. `fetch()` retrieves one URL and returns its final URL, status code, decoded body, and a truncation flag; a non-2xx response is a result, not an error.
 
 ```text
 // Search the web; sources[] is capped to maxResults:

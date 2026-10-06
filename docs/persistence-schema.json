@@ -21727,6 +21727,124 @@
       }
     },
     {
+      "key": "event:web/model-search-request",
+      "kind": "event",
+      "event": "web/model-search-request",
+      "surface": false,
+      "digest": "63534f82de9c65fdde2766efcc791b59851e13bd3916dc930899172d900e770b",
+      "schema": {
+        "root": 0,
+        "nodes": [
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "data",
+                "type": 1,
+                "optional": false
+              },
+              {
+                "name": "ignorable",
+                "type": 9,
+                "optional": true
+              },
+              {
+                "name": "seq",
+                "type": 8,
+                "optional": false
+              },
+              {
+                "name": "time",
+                "type": 8,
+                "optional": false
+              },
+              {
+                "name": "type",
+                "type": 10,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "api",
+                "type": 2,
+                "optional": false
+              },
+              {
+                "name": "body",
+                "type": 3,
+                "optional": false
+              },
+              {
+                "name": "model",
+                "type": 2,
+                "optional": false
+              },
+              {
+                "name": "provider",
+                "type": 2,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "primitive",
+            "type": "string"
+          },
+          {
+            "kind": "union",
+            "types": [
+              2,
+              4,
+              5,
+              6,
+              7,
+              8
+            ]
+          },
+          {
+            "kind": "array",
+            "element": 3
+          },
+          {
+            "kind": "object",
+            "properties": [],
+            "indices": [
+              {
+                "key": 2,
+                "value": 3
+              }
+            ]
+          },
+          {
+            "kind": "primitive",
+            "type": "boolean"
+          },
+          {
+            "kind": "primitive",
+            "type": "null"
+          },
+          {
+            "kind": "primitive",
+            "type": "number"
+          },
+          {
+            "kind": "literal",
+            "value": true
+          },
+          {
+            "kind": "literal",
+            "value": "web/model-search-request"
+          }
+        ]
+      }
+    },
+    {
       "key": "event:workspace/changes",
       "kind": "event",
       "event": "workspace/changes",
@@ -22762,6 +22880,11 @@
       ]
     },
     {
+      "digest": "406f56b0447ea12ba37c089adf625138ba64e888ce3d6ec42696bcb62d378149",
+      "names": [],
+      "sources": []
+    },
+    {
       "digest": "408927267422a7b2beb6df354ff7c1406d929a5646554f48adf85eb8372f811c",
       "names": [],
       "sources": []
@@ -23216,6 +23339,15 @@
       "sources": []
     },
     {
+      "digest": "5da6fd65259407c58048c69dfbd2eb9ec5dd586368c7012896a7b10da14dc5f8",
+      "names": [
+        "packages/llm/llm/src/web-search.ts#LlmWebSearchRequestRecord"
+      ],
+      "sources": [
+        "packages/llm/llm/src/web-search.ts:32"
+      ]
+    },
+    {
       "digest": "5dd766ccd1702a1142ad8b4bd44f2242f8e8a6752669ad3de0a5d224329b1438",
       "names": [],
       "sources": [
@@ -23287,6 +23419,11 @@
     },
     {
       "digest": "62ecb62dc0fe1b5e70217f8a80c39256a40ee3a1917be14e5ca899d20c35f7fd",
+      "names": [],
+      "sources": []
+    },
+    {
+      "digest": "63534f82de9c65fdde2766efcc791b59851e13bd3916dc930899172d900e770b",
       "names": [],
       "sources": []
     },

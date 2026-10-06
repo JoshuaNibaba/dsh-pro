@@ -50,6 +50,8 @@ import type {
   LlmModelInfo,
   LlmProviderInfo,
   LlmResolvedModelInfo,
+  LlmWebSearchRequest,
+  LlmWebSearchResult,
   PreparedAdapterCall,
   ReasoningEffortId as ReasoningEffortIdType,
   ResolvedRetryPolicy,
@@ -61,6 +63,7 @@ import type { ResolvedPiAiProviderProfile } from './config.ts'
 import { toPiContext } from './context.ts'
 import { createModels, getSupportedThinkingLevels } from './models.ts'
 import { toStreamChunks } from './stream.ts'
+import { runWebSearch, webSearchFamily } from './web-search.ts'
 
 /** One resolution's frozen view: the profiles and the collection built from them. */
 interface PiAiSnapshot {
@@ -321,6 +324,20 @@ export class PiAiAdapter extends LlmAdapter {
       model: this.modelInfo(snapshot, provider, model),
       stream: options => this.streamWithSnapshot(options, snapshot),
     })
+  }
+
+  override async webSearch(request: LlmWebSearchRequest): Promise<LlmWebSearchResult> {
+    const snapshot = this.current()
+    const profile = this.profileOf(snapshot, request.provider)
+    const model = this.modelOf(snapshot, request.provider, request.model)
+    // Refuse an unsupported protocol before resolving any credential.
+    webSearchFamily(model)
+    const apiKey = await this.config.resolveApiKey(request.provider, profile)
+    return runWebSearch({
+      models: snapshot.models,
+      model,
+      options: { ...profileOptions(profile, undefined, apiKey), headers: requestHeaders(profile.headers) },
+    }, request)
   }
 
   stream(options: GenerateOptions): AsyncIterable<StreamChunk> {

@@ -80,6 +80,7 @@
 | `event:turn/start` | event | `aa0957eca50aeb28bcd2e6930b95809926edacb550c8c340ba526ba6b861b3d8` | [`{ type: "turn/start" }`](#persistence-type-sha256-aa0957eca50aeb28bcd2e6930b95809926edacb550c8c340ba526ba6b861b3d8) |
 | `event:user/message` | event | `b83ed1b1cfffbd7bd5cca06ea72e44be57beb68b39e5a96660ce42a9e21aa411` | [`{ type: "user/message" }`](#persistence-type-sha256-b83ed1b1cfffbd7bd5cca06ea72e44be57beb68b39e5a96660ce42a9e21aa411) |
 | `event:web/deepseek-search-llm-request` | event | `cf6e3aaf1e2de6480aa0157730a41b9a492108a55304100b0f7e112711dd4331` | [`{ type: "web/deepseek-search-llm-request" }`](#persistence-type-sha256-cf6e3aaf1e2de6480aa0157730a41b9a492108a55304100b0f7e112711dd4331) |
+| `event:web/model-search-request` | event | `63534f82de9c65fdde2766efcc791b59851e13bd3916dc930899172d900e770b` | [`{ type: "web/model-search-request" }`](#persistence-type-sha256-63534f82de9c65fdde2766efcc791b59851e13bd3916dc930899172d900e770b) |
 | `event:workspace/changes` | event | `e308ccf867a5398e316e0af8cb6ce238a8d33a63b9b384c8250a686786285f72` | [`{ type: "workspace/changes" }`](#persistence-type-sha256-e308ccf867a5398e316e0af8cb6ce238a8d33a63b9b384c8250a686786285f72) |
 
 ## 事件信封
@@ -1265,6 +1266,17 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 ```
 
 来源：[`packages/web/web-search-deepseek/src/provider.ts:82`](../packages/web/web-search-deepseek/src/provider.ts)
+
+<a id="webmodel-search-request--log-only"></a>
+
+#### `web/model-search-request` — log-only
+
+```ts persistence-catalog
+/** Secret-free auxiliary native-search model request recorded before dispatch. */
+'web/model-search-request': LlmWebSearchRequestRecord
+```
+
+来源：[`packages/web/web-search-model/src/provider.ts:22`](../packages/web/web-search-model/src/provider.ts)
 
 ### `workspace/*`
 
@@ -2853,6 +2865,14 @@ SHA-256: `6f611bed14b2106542480c4a230b4a83baf76dc0d8ac0cd13319a7cb8dae7675`
 
 `"web/deepseek-search-llm-request"`
 
+<a id="persistence-type-sha256-406f56b0447ea12ba37c089adf625138ba64e888ce3d6ec42696bcb62d378149"></a>
+
+### `"web/model-search-request"`
+
+SHA-256: `406f56b0447ea12ba37c089adf625138ba64e888ce3d6ec42696bcb62d378149`
+
+`"web/model-search-request"`
+
 <a id="persistence-type-sha256-935c8d486292b13c87b57ca280eb8c58b5b2f5239be86fcd4334c33fdeb87682"></a>
 
 ### `"web_search"`
@@ -3858,6 +3878,25 @@ SHA-256: `6f72ece8f317cd080c4f20a93f1bf709965f5b81ac4669528f5a023191cfcf20`
 | `retryId` | 必需 | `string` |
 | `step` | 必需 | `number` |
 | `turn` | 必需 | `number` |
+
+<a id="persistence-type-sha256-5da6fd65259407c58048c69dfbd2eb9ec5dd586368c7012896a7b10da14dc5f8"></a>
+
+<a id="persistence-type-llmwebsearchrequestrecord"></a>
+
+<a id="persistence-type-packagesllmllmsrcweb-searchtsllmwebsearchrequestrecord"></a>
+
+### `LlmWebSearchRequestRecord`
+
+SHA-256: `5da6fd65259407c58048c69dfbd2eb9ec5dd586368c7012896a7b10da14dc5f8`
+
+来源：[`packages/llm/llm/src/web-search.ts:32`](../packages/llm/llm/src/web-search.ts)
+
+| 属性 | 存在性 | 类型 |
+|---|---|---|
+| `api` | 必需 | `string` |
+| `body` | 必需 | [`JsonValue`](#persistence-type-sha256-c592ce75aab73fcab19c1d7845684c72cf402b78d2e1f2833a58ecf9f3598ed6) |
+| `model` | 必需 | `string` |
+| `provider` | 必需 | `string` |
 
 <a id="persistence-type-sha256-cb7b863ddb7b3eab5f18f216602feba25f47b456e73e4e72b6bcc259875c6dab"></a>
 
@@ -8728,6 +8767,22 @@ SHA-256: `cf6e3aaf1e2de6480aa0157730a41b9a492108a55304100b0f7e112711dd4331`
 | `seq` | 必需 | `number` |
 | `time` | 必需 | `number` |
 | `type` | 必需 | `"web/deepseek-search-llm-request"` |
+
+<a id="persistence-type-sha256-63534f82de9c65fdde2766efcc791b59851e13bd3916dc930899172d900e770b"></a>
+
+<a id="persistence-type-eventwebmodel-search-request"></a>
+
+### `{ type: "web/model-search-request" }`
+
+SHA-256: `63534f82de9c65fdde2766efcc791b59851e13bd3916dc930899172d900e770b`
+
+| 属性 | 存在性 | 类型 |
+|---|---|---|
+| `data` | 必需 | [`LlmWebSearchRequestRecord`](#persistence-type-sha256-5da6fd65259407c58048c69dfbd2eb9ec5dd586368c7012896a7b10da14dc5f8) |
+| `ignorable` | 可选 | `true` |
+| `seq` | 必需 | `number` |
+| `time` | 必需 | `number` |
+| `type` | 必需 | `"web/model-search-request"` |
 
 <a id="persistence-type-sha256-2d11ca7b0d4493e244b74eba093227866b33249841e59a1e9bf56afed38604c3"></a>
 
