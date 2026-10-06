@@ -7,7 +7,7 @@ kind: "package-reference"
 
 [English](README.md) | 中文
 
-## 概要
+## 概述
 
 有了 `dsh-web-search-model`，`web_search` 使用会话当前所用模型的搜索能力。每次搜索是在会话的提供方路由上发出的一次辅助模型请求，唯一的工具是该提供方的服务端搜索工具，与 Claude Code 的 WebSearch 工具发出的请求相同。Anthropic Messages 路由使用 `web_search_20250305`；OpenAI Responses、Azure Responses 和 ChatGPT Codex 路由使用 `web_search`。原生搜索由其他提供方承担的路由（如 DeepSeek）委托给它；其余路由直接失败。面向模型的 `web_search` 工具位于 `dsh-tool-web`。
 

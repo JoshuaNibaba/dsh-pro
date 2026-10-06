@@ -1,0 +1,10 @@
+- name: cordis:web-server
+  config:
+    host: 127.0.0.1
+    port: 0
+- name: cordis:server-status-test-connection
+- name: cordis:connection
+- name: cordis:server-status
+  config:
+    sampleIntervalMs: 250
+    requestTimeoutMs: 1234

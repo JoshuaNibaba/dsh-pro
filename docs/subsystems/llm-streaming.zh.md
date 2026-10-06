@@ -880,6 +880,14 @@ declare abstract class LlmAdapter {
    */
   async prepareCall(provider: string, model: string, signal?: AbortSignal): Promise<PreparedAdapterCall>;
   /**
+   * Run one native web search as an auxiliary request on an owned route. The
+   * default rejects with {@link WEB_SEARCH_UNSUPPORTED_CODE}; adapters whose
+   * protocol carries a server-side search tool override it.
+   * @param request - route, model, query, cancellation, and request observer.
+   * @returns the provider's commentary and links in response order.
+   */
+  webSearch(request: LlmWebSearchRequest): Promise<LlmWebSearchResult>;
+  /**
    * Stream one model call as raw chunks. The only required method.
    * @param options - the fully-assembled request; implementations must honor `options.signal`.
    * @returns the chunk stream, obeying the adapter contract documented on `StreamChunk`.

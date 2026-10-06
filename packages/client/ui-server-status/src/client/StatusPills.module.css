@@ -1,0 +1,17 @@
+.root {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: center;
+  gap: 4px 12px;
+  min-width: 0;
+  max-width: 100%;
+  color: var(--dsw-alias-label-secondary);
+  font-size: calc(var(--dsh-content-font-size-secondary, 13px) - 1px);
+  line-height: calc(20px + var(--dsh-content-font-delta-secondary, 0px));
+  font-variant-numeric: tabular-nums;
+}
+
+.root > span {
+  white-space: nowrap;
+}
