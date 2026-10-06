@@ -5,6 +5,7 @@
 //   sshPort     SSH port (0 = ssh default or ~/.ssh/config)
 //   sshUser     SSH user ("" = ssh default or ~/.ssh/config)
 //   webURL      password-protected web address, e.g. https://dsh.example.com ("" = none)
+//   preferSSH   load the UI through the SSH tunnel even when webURL is set (default false)
 //   autoUpdate  check GitHub releases for new versions (default true)
 //   remotePort  dsh web port on the server (default 18790)
 //   localPort   local SSH tunnel port (default 18791; dsh's login cookie is bound to it)
@@ -17,6 +18,7 @@ struct Settings {
     var sshPort: Int
     var sshUser: String
     var webURL: String
+    var preferSSH: Bool
     var autoUpdate: Bool
     var remotePort: Int
     var localPort: Int
@@ -33,6 +35,7 @@ struct Settings {
             sshPort: d.integer(forKey: "sshPort"),
             sshUser: (d.string(forKey: "sshUser") ?? "").trimmed,
             webURL: (d.string(forKey: "webURL") ?? "").trimmed,
+            preferSSH: d.bool(forKey: "preferSSH"),
             autoUpdate: d.object(forKey: "autoUpdate") as? Bool ?? true,
             remotePort: d.object(forKey: "remotePort") as? Int ?? 18790,
             localPort: d.object(forKey: "localPort") as? Int ?? 18791,
@@ -45,10 +48,14 @@ struct Settings {
         d.set(sshPort, forKey: "sshPort")
         d.set(sshUser, forKey: "sshUser")
         d.set(webURL, forKey: "webURL")
+        d.set(preferSSH, forKey: "preferSSH")
         d.set(autoUpdate, forKey: "autoUpdate")
     }
 
     var isConfigured: Bool { !server.isEmpty || web != nil }
+
+    /// Whether the UI loads from the web address (password login) rather than the SSH tunnel.
+    var prefersWeb: Bool { web != nil && (server.isEmpty || !preferSSH) }
 
     /// `user@server`, or the server as typed when it already names a user or no user is set.
     var sshDestination: String {
@@ -70,7 +77,7 @@ struct Settings {
         return c.url
     }
 
-    var displayName: String { !server.isEmpty ? server : (web?.host ?? "") }
+    var displayName: String { prefersWeb || server.isEmpty ? (web?.host ?? "") : server }
 
     /// Hosts whose pages load inside the app; anything else opens in the default browser.
     var internalHosts: Set<String> {

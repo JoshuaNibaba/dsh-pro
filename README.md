@@ -2,7 +2,7 @@
 
 在自己的服务器上运行 [DeepSeek Harness](https://github.com/deepseek-ai/DeepSeek-Harness) 的 Web 界面(`dsh web`),然后从 Mac 客户端、浏览器或手机远程使用。
 
-- **Mac 客户端**(`mac/`):原生 macOS 应用(WKWebView,几百 KB)。优先用本机 SSH key 建立隧道;SSH 不可用时改用网页地址,并在页面里输入访问密码。支持应用内自动更新。
+- **Mac 客户端**(`mac/`):原生 macOS 应用(WKWebView,几百 KB)。填网页地址和访问密码即可登录，和浏览器一样;也可以用本机 SSH key 建立隧道。支持应用内自动更新。
 - **服务端**(`server/`):一键安装脚本。dsh 只监听服务器的 127.0.0.1;可选地在前面加一个密码登录网关和 HTTPS,让浏览器和手机也能访问,登录后长期保持。
 - **命令行**(`cli/dsh-remote`):可选的终端工具。
 
@@ -26,9 +26,11 @@ curl -fsSL https://raw.githubusercontent.com/JoshuaNibaba/dsh-remote-mac/main/se
 
 常用选项:`--password 新密码`(修改密码,同时让所有已登录设备退出)、`--workdir 目录`(dsh 的工作目录,默认 `/home/dsh/workspace`)、`--dsh-version 版本`。重复运行是安全的。
 
-脚本会把 root 的 `authorized_keys` 复制给 `dsh` 用户(`--no-copy-root-keys` 关闭),并只授予它重启这两个服务、读取它们日志的 sudo 权限。
+脚本会把 root 的 `authorized_keys` 复制给 `dsh` 用户(`--no-copy-root-keys` 关闭),并只授予它重启这两个服务、读取它们日志和运行 `dsh-update` 的 sudo 权限。
 
-升级服务器上的 dsh:`dsh-update [版本]`。
+升级服务器上的 dsh:`dsh-update [版本]`(root),或以 `dsh` 用户运行 `sudo dsh-update [版本]`;版本只接受 npm 版本号或标签。
+
+域名经 Cloudflare 代理时,SSL 模式 Full 和 Flexible 都可以用(nginx 只信任 Cloudflare 官方 IP 段发来的 `X-Forwarded-Proto` 和 `CF-Connecting-IP`)。建议用 Full:Flexible 下 Cloudflare 到服务器这一段是明文 HTTP。
 
 > dsh 能在服务器上执行任意命令。开放网页访问时请使用足够长的密码,并始终使用 HTTPS。网关对密码错误有限流(同一 IP 连续 5 次错误锁定 15 分钟)。
 
@@ -45,14 +47,25 @@ ditto -x -k /tmp/DSH-Remote.zip ~/Applications
 
 | 项目 | 说明 |
 |---|---|
-| 服务器 | 服务器 IP 或域名(也可以是 `~/.ssh/config` 里的别名) |
-| SSH 端口 | 留空为 22 |
-| SSH 用户 | 建议 `dsh` |
-| 网页地址 | 可选,安装时 `--domain` 对应的地址,例如 `https://dsh.example.com` |
+| 网页地址 | 安装时 `--domain` 对应的地址,例如 `https://dsh.example.com` |
+| 访问密码 | 首次登录或密码修改后填写。只用于这一次登录，不会保存;登录状态保持一年 |
+| SSH 服务器 | 可选,服务器 IP(也可以是 `~/.ssh/config` 里的别名)。域名经 Cloudflare 代理时要填 IP |
+| SSH 端口 / 用户 | 留空为 22;用户建议 `dsh` |
+| 优先使用 SSH 隧道 | 默认关闭 |
 
-连接顺序:先用本机的 SSH key(或 ssh-agent)登录服务器并建立隧道;连不上时使用网页地址,在页面中输入访问密码。两项至少填一项。
+**推荐只填网页地址和访问密码**:不需要配置 SSH key,和浏览器、手机的登录方式一样。填了 SSH 服务器时,「查看日志」「重启服务」「在终端中登录服务器」使用 SSH;网页地址打不开时也会自动改用 SSH 隧道。勾选「优先使用 SSH 隧道」则反过来，网页地址作为备用。网页地址和 SSH 服务器至少填一项。
 
-让服务器信任本机的 SSH key:
+两种方式的差别:
+
+| | 网页地址 + 密码 | SSH 隧道 |
+|---|---|---|
+| 配置 | 只要密码 | 需要本机 SSH key 被服务器信任 |
+| 延迟 | 多经过一层 CDN / nginx / 网关；网关本身不到 1 ms,CDN 的影响取决于本机到最近节点的线路 | 直连服务器 |
+| 功能 | 完整(实时消息走 WebSocket,dsh 每 2 秒发心跳，不会被 CDN 的空闲超时断开) | 完整 |
+| 上传 | 经 Cloudflare 免费版时单个请求最大 100 MB | 不限 |
+| 服务菜单 | 需要另外填 SSH 服务器 | 可用 |
+
+让服务器信任本机的 SSH key(只在使用 SSH 时需要):
 
 ```sh
 ssh-keygen -t ed25519                      # 本机还没有 key 时
@@ -74,4 +87,4 @@ ssh-copy-id -p <SSH 端口> dsh@<服务器>      # 或把 ~/.ssh/id_ed25519.pub 
 
 每次推送到 `main` 且修改了 `mac/` 时,GitHub Actions 在 macOS 上编译并发布 release `v1.0.<构建号>`,客户端的自动更新读取最新 release。Fork 本仓库后,构建出的客户端会从你自己的仓库检查更新;服务端安装脚本可用环境变量 `DSH_REMOTE_REPO=<owner>/<repo>` 指定下载来源。
 
-命令行工具:`ln -s "$PWD/cli/dsh-remote" ~/.local/bin/dsh-remote`,它读取 Mac 客户端的设置,`dsh-remote help` 查看用法。
+命令行工具:`ln -s "$PWD/cli/dsh-remote" ~/.local/bin/dsh-remote`,它读取 Mac 客户端的设置(包括本地端口，默认 18791),`dsh-remote help` 查看用法。只配置了网页地址时,`dsh-remote open` 在浏览器中打开网页地址。

@@ -1,10 +1,14 @@
 // DSH Remote: a thin macOS client for a dsh web service on a remote server.
 //
-// Connection order:
-//   1. SSH (key or ssh-agent only): read dsh's current launch-token URL over SSH,
-//      open an `ssh -L` tunnel and load the UI from 127.0.0.1.
-//   2. Otherwise the configured web address (server/install.sh --domain), where the
-//      password gateway shows its login page; the WKWebView keeps the login cookie.
+// Two routes to the UI:
+//   web  the configured web address (server/install.sh --domain): the password gateway
+//        shows its login page and sets a long-lived cookie, exactly as in a browser.
+//        A password typed in Settings fills that page once; it is never stored.
+//   ssh  (key or ssh-agent only) read dsh's current launch-token URL over SSH, open an
+//        `ssh -L` tunnel and load the UI from 127.0.0.1.
+// The web route is used whenever a web address is set, unless "prefer SSH" is on;
+// each route falls back to the other when it cannot connect. SSH, when configured,
+// also backs the Service menu (logs, restart, terminal) in either route.
 // The WKWebView data store persists, so both logins survive restarts.
 
 import AppKit
@@ -37,6 +41,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     var settingsWindow: SettingsWindowController?
     var updateTimer: Timer?
     var updating = false
+    /// Password typed in Settings, used to fill the gateway's login page once.
+    var pendingPassword = ""
+    /// The web route failed and SSH was tried instead during this connect().
+    var webFellBack = false
 
     func applicationDidFinishLaunching(_ n: Notification) {
         buildMenu()
@@ -119,8 +127,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
             openSettings()
             return
         }
-        guard !s.server.isEmpty else { return useWeb(s, reason: nil) }
+        webFellBack = false
+        if s.prefersWeb { return useWeb(s, reason: nil) }
+        connectSSH(s, fallbackToWeb: s.web != nil)
+    }
 
+    func connectSSH(_ s: Settings, fallbackToWeb: Bool) {
         connecting = true
         showStatus("正在通过 SSH 连接 \(s.server) …")
         DispatchQueue.global().async {
@@ -151,7 +163,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
                     self.webView.load(URLRequest(url: url))
                 case .failure(let e):
                     self.tunnel.stop()
-                    if s.web != nil {
+                    if fallbackToWeb {
                         self.useWeb(s, reason: e.localizedDescription)
                     } else {
                         self.route = .none
@@ -213,7 +225,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     @objc func openSettings() {
         if settingsWindow == nil {
             settingsWindow = SettingsWindowController(settings: Settings.load())
-            settingsWindow?.onSave = { [weak self] _ in self?.reconnect() }
+            settingsWindow?.onSave = { [weak self] _, password in
+                self?.pendingPassword = password
+                self?.reconnect()
+            }
         } else {
             settingsWindow?.fill(Settings.load())
         }
@@ -375,6 +390,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         guard case .web(let web) = route else {
             return alert("当前不是网页登录", "通过 SSH 连接时不使用访问密码。")
         }
+        pendingPassword = ""
         webView.load(URLRequest(url: web.appendingPathComponent("__dsh/logout")))
     }
 
@@ -422,10 +438,45 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         log("provisional failure \(error)")
         if (error as NSError).code == NSURLErrorCancelled { return }
         if route == .ssh && !tunnel.isRunning { return } // tunnelDropped owns this case
+        if case .web = route, !settings.server.isEmpty, !webFellBack, !connecting {
+            webFellBack = true
+            log("web address unreachable, trying SSH")
+            return connectSSH(settings, fallbackToWeb: false)
+        }
         showStatus("页面加载失败", error.localizedDescription, retry: true, settingsLink: true)
     }
 
-    func webView(_ wv: WKWebView, didFinish nav: WKNavigation!) { log("finished \(wv.url?.absoluteString ?? "")") }
+    func webView(_ wv: WKWebView, didFinish nav: WKNavigation!) {
+        log("finished \(wv.url?.absoluteString ?? "")")
+        guard case .web(let web) = route, let url = wv.url, url.host == web.host else { return }
+        guard url.path.hasSuffix("/__dsh/login") else {
+            pendingPassword = "" // already logged in: the password is not needed
+            return
+        }
+        guard !pendingPassword.isEmpty else { return }
+        submitLogin(wv, password: pendingPassword)
+        pendingPassword = "" // one attempt only; a wrong password leaves the page for manual entry
+    }
+
+    /// Fills and submits the gateway's login form. The page's own error message
+    /// (wrong password, too many attempts) blocks the automatic submit.
+    func submitLogin(_ wv: WKWebView, password: String) {
+        guard let data = try? JSONSerialization.data(withJSONObject: [password]),
+              let literal = String(data: data, encoding: .utf8) else { return }
+        let js = """
+        (function (p) {
+          var f = document.querySelector('form[action$="/__dsh/login"]');
+          if (!f || !f.elements.password || f.querySelector('.err')) return false;
+          f.elements.password.value = p;
+          f.submit();
+          return true;
+        })(\(literal)[0])
+        """
+        wv.evaluateJavaScript(js) { result, error in
+            let outcome = error?.localizedDescription ?? String(describing: result ?? "nil")
+            log("login form submitted: \(outcome)")
+        }
+    }
 
     func webView(_ wv: WKWebView, didFail nav: WKNavigation!, withError error: Error) { log("failed \(error)") }
 

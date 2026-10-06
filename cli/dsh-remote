@@ -1,29 +1,42 @@
 #!/usr/bin/env bash
 # Command-line companion of DSH Remote. Reads the app's settings
 # (defaults domain com.joshua.dsh-remote) unless overridden by environment:
-#   DSH_REMOTE_SERVER, DSH_REMOTE_SSH_PORT, DSH_REMOTE_SSH_USER, DSH_LOCAL_PORT
+#   DSH_REMOTE_SERVER, DSH_REMOTE_SSH_PORT, DSH_REMOTE_SSH_USER, DSH_REMOTE_WEB_URL,
+#   DSH_REMOTE_PORT, DSH_LOCAL_PORT
+# With a web address and no SSH server (or `open` without SSH access), `open` simply
+# opens the password-protected web address in the browser.
 set -euo pipefail
 
 pref() { defaults read com.joshua.dsh-remote "$1" 2>/dev/null || true; }
 SERVER="${DSH_REMOTE_SERVER:-$(pref server)}"
 SSH_PORT="${DSH_REMOTE_SSH_PORT:-$(pref sshPort)}"
 SSH_USER="${DSH_REMOTE_SSH_USER:-$(pref sshUser)}"
-REMOTE_PORT="${DSH_REMOTE_PORT:-18790}"
-LOCAL_PORT="${DSH_LOCAL_PORT:-18790}"
+WEB_URL="${DSH_REMOTE_WEB_URL:-$(pref webURL)}"
+REMOTE_PORT="${DSH_REMOTE_PORT:-$(pref remotePort)}"; REMOTE_PORT="${REMOTE_PORT:-18790}"
+# Same default as the app (18791), so a local `dsh web` on 18790 does not collide.
+LOCAL_PORT="${DSH_LOCAL_PORT:-$(pref localPort)}"; LOCAL_PORT="${LOCAL_PORT:-18791}"
 SERVICE="dsh-web"
 APP_REPO="${DSH_REMOTE_APP_REPO:-JoshuaNibaba/dsh-remote-mac}"
 APP_DIR="$HOME/Applications/DSH Remote.app"
 CTL="${TMPDIR:-/tmp}/dsh-remote-${LOCAL_PORT}.ctl"
 
-need_server() { [ -n "$SERVER" ] || { echo "dsh-remote: 未配置服务器;在 DSH Remote 设置中填写,或设置 DSH_REMOTE_SERVER" >&2; exit 1; }; }
+need_server() { [ -n "$SERVER" ] || { echo "dsh-remote: 未配置 SSH 服务器;在 DSH Remote 设置中填写,或设置 DSH_REMOTE_SERVER" >&2; exit 1; }; }
 dest() { if [ -n "$SSH_USER" ] && [[ "$SERVER" != *@* ]]; then echo "$SSH_USER@$SERVER"; else echo "$SERVER"; fi; }
 ssh_opts() { [ -n "$SSH_PORT" ] && [ "$SSH_PORT" != 0 ] && echo "-p $SSH_PORT"; true; }
 rssh() { need_server; ssh $(ssh_opts) "$(dest)" "$@"; }
 
 tunnel_up() { ssh -S "$CTL" -O check "$(dest)" >/dev/null 2>&1; }
+# The DSH Remote app's own tunnel on the same port (it shares dsh's login cookie).
+app_tunnel() {
+  local pid
+  for pid in $(lsof -nP -iTCP:"$LOCAL_PORT" -sTCP:LISTEN -t 2>/dev/null); do
+    ps -o command= -p "$pid" | grep -q -- "-L 127.0.0.1:${LOCAL_PORT}:" && return 0
+  done
+  return 1
+}
 start_tunnel() {
   need_server
-  tunnel_up && return
+  { tunnel_up || app_tunnel; } && return
   ssh $(ssh_opts) -f -N -M -S "$CTL" -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 \
     -L "127.0.0.1:${LOCAL_PORT}:127.0.0.1:${REMOTE_PORT}" "$(dest)"
 }
@@ -56,25 +69,38 @@ update_app() {
   return 0
 }
 
+open_web() {
+  [ -n "$WEB_URL" ] || { echo "dsh-remote: 未配置网页地址;在 DSH Remote 设置中填写,或设置 DSH_REMOTE_WEB_URL" >&2; exit 1; }
+  open "$WEB_URL"
+}
+
 case "${1:-open}" in
-  open)       start_tunnel; open "$(local_url)" ;;
+  open)
+    if [ -z "$SERVER" ]; then open_web
+    elif ! { start_tunnel && url="$(local_url)"; }; then
+      [ -n "$WEB_URL" ] || exit 1
+      echo "dsh-remote: SSH 不可用,改用网页地址" >&2; open_web
+    else open "$url"
+    fi ;;
+  web)        open_web ;;
   tunnel)     start_tunnel; echo "tunnel: http://127.0.0.1:${LOCAL_PORT}/" ;;
   url)        local_url ;;
   close)      stop_tunnel ;;
-  status)     tunnel_up && echo "tunnel: up" || echo "tunnel: down"; rssh "systemctl is-active $SERVICE dsh-gateway 2>/dev/null; dsh --version" ;;
+  status)     { tunnel_up || app_tunnel; } && echo "tunnel: up" || echo "tunnel: down"; rssh "systemctl is-active $SERVICE dsh-gateway 2>/dev/null; dsh --version" ;;
   logs)       rssh "sudo -n journalctl -u $SERVICE -o cat --no-pager -n 200 2>/dev/null || journalctl -u $SERVICE -o cat --no-pager -n 200" | tail -n "${2:-50}" | sed 's/token=[^ ]*/token=<redacted>/' ;;
   restart)    rssh "sudo -n systemctl restart $SERVICE 2>/dev/null || systemctl restart $SERVICE"; echo "restarted" ;;
   update)     rssh "sudo -n /usr/local/sbin/dsh-update ${2:-latest} 2>/dev/null || /usr/local/sbin/dsh-update ${2:-latest}" ;;
   ssh)        need_server; exec ssh -t $(ssh_opts) "$(dest)" ;;
   update-app) update_app ;;
   *) cat <<EOF
-usage: dsh-remote [open|tunnel|url|close|status|logs [N]|restart|update [version]|update-app|ssh]
-  open        SSH 隧道 + 在浏览器中打开 dsh(默认)
+usage: dsh-remote [open|web|tunnel|url|close|status|logs [N]|restart|update [version]|update-app|ssh]
+  open        SSH 隧道 + 在浏览器中打开 dsh(默认);没有 SSH 时打开网页地址
+  web         在浏览器中打开网页地址(密码登录)
   close       关闭隧道
   update      升级服务器上的 dsh
   update-app  下载并安装最新的 DSH Remote.app
   ssh         登录服务器
-server: ${SERVER:-<未配置>}  ssh port: ${SSH_PORT:-default}  ssh user: ${SSH_USER:-default}
+web: ${WEB_URL:-<未配置>}  server: ${SERVER:-<未配置>}  ssh port: ${SSH_PORT:-default}  ssh user: ${SSH_USER:-default}  local port: $LOCAL_PORT
 EOF
      exit 2 ;;
 esac
