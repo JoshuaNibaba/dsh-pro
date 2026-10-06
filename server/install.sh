@@ -83,6 +83,7 @@ id dsh >/dev/null 2>&1 || useradd -m -s /bin/bash dsh
 install -d -o dsh -g dsh "$WORKDIR"
 install -d -m 755 /opt/dsh-remote /etc/dsh-remote
 install -m 755 "$SRC/run-web.sh" /opt/dsh-remote/run-web.sh
+install -m 644 "$SRC/web.patch.yml" /opt/dsh-remote/web.patch.yml
 install -m 644 "$SRC/gateway.mjs" /opt/dsh-remote/gateway.mjs
 install -m 755 "$SRC/dsh-update" /usr/local/sbin/dsh-update
 if [ "$COPY_KEYS" = 1 ] && [ -s /root/.ssh/authorized_keys ]; then

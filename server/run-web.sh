@@ -19,6 +19,9 @@ if [ -n "${DSH_PUBLIC_URL:-}" ] && dsh web --help 2>/dev/null | grep -q -- '--pu
   args+=(--public-url "$DSH_PUBLIC_URL")
 fi
 [ -n "${DSH_TRUSTED_HOST:-}" ] && args+=(--trusted-host "$DSH_TRUSTED_HOST")
+# Remote-access tuning (WebSocket heartbeat), installed next to this script.
+overlay="$(dirname "$0")/web.patch.yml"
+[ -f "$overlay" ] && args+=(--patch "$overlay")
 
 dsh "${args[@]}" 2>&1 | while IFS= read -r line; do
   printf '%s\n' "$line"
