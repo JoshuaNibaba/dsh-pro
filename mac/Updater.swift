@@ -81,6 +81,7 @@ enum Updater {
                     }
                     _ = try fm.replaceItemAt(target, withItemAt: app)
                     try? fm.removeItem(at: dir)
+                    refreshIcon(target)
                     return nil
                 } catch {
                     return error
@@ -97,6 +98,16 @@ enum Updater {
         p.arguments = ["-c", "sleep 1; /usr/bin/open \"$0\"", Bundle.main.bundlePath]
         try? p.run()
         NSApp.terminate(nil)
+    }
+
+    /// The bundle keeps its path across updates, so Finder and the Dock keep showing
+    /// the cached icon. A new modification date plus re-registering the bundle with
+    /// LaunchServices makes them read the new one.
+    static func refreshIcon(_ bundle: URL) {
+        try? FileManager.default.setAttributes([.modificationDate: Date()], ofItemAtPath: bundle.path)
+        try? runTool("/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister",
+                     ["-f", bundle.path])
+        NSWorkspace.shared.noteFileSystemChanged(bundle.path)
     }
 
     private static func runTool(_ path: String, _ args: [String]) throws {
