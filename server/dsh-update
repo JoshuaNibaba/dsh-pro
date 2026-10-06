@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
 # dsh-update [VERSION] [--no-restart]: install @deepseek-ai/dsh@VERSION (default latest)
-# globally and restart dsh-web. npm 11+ skips dependency install scripts unless
+# globally and restart dsh-web. Runs as root (directly or through the dsh user's sudo rule). npm 11+ skips dependency install scripts unless
 # approved, so the native ones dsh needs are run explicitly.
 set -euo pipefail
 VERSION=latest RESTART=1
 for a in "$@"; do
   case "$a" in --no-restart) RESTART=0 ;; *) VERSION="$a" ;; esac
 done
+# The dsh user may run this through sudo: accept only an npm version or dist-tag,
+# never a URL, path or git spec that would install other code as root.
+[[ "$VERSION" =~ ^[0-9A-Za-z][0-9A-Za-z.+-]{0,63}$ ]] || { echo "dsh-update: invalid version: $VERSION" >&2; exit 2; }
 export PATH=/usr/local/bin:$PATH
 log="$(mktemp)"
 npm i -g "@deepseek-ai/dsh@$VERSION" --no-fund --no-audit >"$log" 2>&1 || { cat "$log" >&2; rm -f "$log"; exit 1; }

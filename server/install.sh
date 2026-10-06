@@ -65,8 +65,16 @@ if [ "$need_node" = 1 ]; then
   base="https://nodejs.org/dist/latest-v22.x"
   file="$(curl -fsSL "$base/SHASUMS256.txt" | grep -o "node-v22[0-9.]*-linux-$arch.tar.xz" | head -1)"
   (cd /tmp && curl -fsSLO "$base/$file" && curl -fsSL "$base/SHASUMS256.txt" | grep " $file\$" | sha256sum -c - >/dev/null)
-  tar -xJf "/tmp/$file" -C /usr/local --strip-components=1 --exclude=CHANGELOG.md --exclude=LICENSE --exclude=README.md
+  # --no-same-owner: the tarball's files belong to uid 1000; as root, tar would keep that
+  # owner and let whoever later gets uid 1000 replace node, npm and dsh.
+  tar -xJf "/tmp/$file" -C /usr/local --strip-components=1 --no-same-owner --exclude=CHANGELOG.md --exclude=LICENSE --exclude=README.md
   rm -f "/tmp/$file"
+fi
+# Installs before --no-same-owner left Node's files owned by the tarball's uid 1000.
+# Give them back to root, but only when that uid is not a real account.
+node_uid="$(stat -c %u "$(command -v node)")"
+if [ "$node_uid" != 0 ] && ! getent passwd "$node_uid" >/dev/null; then
+  find /usr/local -xdev -uid "$node_uid" -exec chown -h root:root {} +
 fi
 node -v
 
@@ -85,9 +93,10 @@ if [ "$COPY_KEYS" = 1 ] && [ -s /root/.ssh/authorized_keys ]; then
   done < <(grep -E '^(ssh-|ecdsa-|sk-)' /root/.ssh/authorized_keys)
   chown dsh:dsh /home/dsh/.ssh/authorized_keys; chmod 600 /home/dsh/.ssh/authorized_keys
 fi
-# Lets the dsh SSH user (and DSH Remote) restart the services and read their logs, nothing else.
+# Lets the dsh SSH user (and DSH Remote) restart the services, read their logs and
+# upgrade dsh (dsh-update only accepts an npm version or tag), nothing else.
 cat > /etc/sudoers.d/dsh-remote <<'EOF'
-dsh ALL=(root) NOPASSWD: /usr/bin/systemctl restart dsh-web, /usr/bin/systemctl restart dsh-gateway, /usr/bin/journalctl -u dsh-web -o cat --no-pager -n 200, /usr/bin/journalctl -u dsh-gateway -o cat --no-pager -n 200
+dsh ALL=(root) NOPASSWD: /usr/bin/systemctl restart dsh-web, /usr/bin/systemctl restart dsh-gateway, /usr/bin/journalctl -u dsh-web -o cat --no-pager -n 200, /usr/bin/journalctl -u dsh-gateway -o cat --no-pager -n 200, /usr/local/sbin/dsh-update
 EOF
 chmod 440 /etc/sudoers.d/dsh-remote
 visudo -cf /etc/sudoers.d/dsh-remote >/dev/null
@@ -209,5 +218,6 @@ DSH Remote server is ready.
 EOF
 if [ -n "$DOMAIN" ]; then
   echo "  Browser:       $PUBLIC_URL"
+  echo "  Mac client:    DSH Remote → 设置 → 网页地址 = $PUBLIC_URL, 访问密码 = <password>"
   if [ -n "${GENERATED:-}" ]; then echo "  Password:      $PASSWORD   (generated; change with: install.sh --domain $DOMAIN --tls $TLS --password NEW)"; fi
 fi
