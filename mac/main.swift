@@ -29,10 +29,10 @@ enum Route: Equatable {
     case web(URL)
 }
 
-final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigationDelegate, WKUIDelegate,
+final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUIDelegate,
                          WKDownloadDelegate, WKScriptMessageHandler {
     var window: NSWindow!
-    var webView: ChromeWebView!
+    var webView: WKWebView!
     let tunnel = Tunnel()
     var settings = Settings.load()
     var route = Route.none
@@ -55,7 +55,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         config.websiteDataStore = .default()
         config.preferences.setValue(true, forKey: "developerExtrasEnabled")
         Chrome.configure(config, handler: self)
-        webView = ChromeWebView(frame: .zero, configuration: config)
+        webView = WKWebView(frame: .zero, configuration: config)
         webView.navigationDelegate = self
         webView.uiDelegate = self
         webView.allowsBackForwardNavigationGestures = false
@@ -63,8 +63,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1280, height: 860),
                           styleMask: [.titled, .closable, .miniaturizable, .resizable],
                           backing: .buffered, defer: false)
-        window.delegate = self
-        Chrome.install(window, webView: webView)
+        window.contentView = webView
+        Chrome.install(window)
         window.setFrameAutosaveName("DSHRemoteMain")
         if !window.setFrameUsingName("DSHRemoteMain") { window.center() }
         window.makeKeyAndOrderFront(nil)
@@ -126,7 +126,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         settings = Settings.load()
         let s = settings
         window.title = s.displayName.isEmpty ? "DSH Remote" : "DSH Remote — \(s.displayName)"
-        Chrome.layoutTrafficLights(window)
         guard s.isConfigured else {
             route = .none
             showStatus("尚未配置服务器", "请在「设置」中填写服务器地址或网页地址。", settingsLink: true)
@@ -454,7 +453,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
 
     func webView(_ wv: WKWebView, didFinish nav: WKNavigation!) {
         log("finished \(wv.url?.absoluteString ?? "")")
-        Chrome.syncFullscreen(window, webView)
         guard case .web(let web) = route, let url = wv.url, url.host == web.host else { return }
         guard url.path.hasSuffix("/__dsh/login") else {
             pendingPassword = "" // already logged in: the password is not needed
@@ -492,18 +490,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
     // MARK: window chrome
 
     func userContentController(_ c: WKUserContentController, didReceive message: WKScriptMessage) {
-        // Only the app's own pages may move the window or set its appearance.
+        // Only the app's own pages may recolor the window.
         guard message.frameInfo.isMainFrame, let url = webView.url, isInternal(url) else { return }
-        Chrome.handle(message.body, window: window, webView: webView)
-    }
-
-    func windowDidResize(_ n: Notification) { Chrome.layoutTrafficLights(window) }
-
-    func windowDidEnterFullScreen(_ n: Notification) { Chrome.syncFullscreen(window, webView) }
-
-    func windowDidExitFullScreen(_ n: Notification) {
-        Chrome.layoutTrafficLights(window)
-        Chrome.syncFullscreen(window, webView)
+        Chrome.handle(message.body, window: window)
     }
 
     // MARK: WKDownloadDelegate
