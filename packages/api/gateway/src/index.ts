@@ -148,11 +148,17 @@ export interface Config {
   readonly websocketHeartbeatIntervalMs?: number
   /** Buffered uplink frame bytes one logical stream may hold before it fails with `gateway/uplink-overflow`. @default 262144 */
   readonly streamInboxBytes?: number
+  /**
+   * Accept the browser's permessage-deflate offer on the Remote stream WebSocket. Session
+   * history snapshots are JSON and shrink several-fold, at the cost of one zlib context per socket. @default true
+   */
+  readonly websocketCompression?: boolean
 }
 
 interface ResolvedConfig extends Config {
   readonly websocketHeartbeatIntervalMs: number
   readonly streamInboxBytes: number
+  readonly websocketCompression: boolean
 }
 
 /**
@@ -202,6 +208,7 @@ export class TypertGatewayService extends Service implements TypertGateway {
     websocketHeartbeatIntervalMs: z.number().step(1).min(1).max(MAX_TIMER_DELAY_MS)
       .default(DEFAULT_WEBSOCKET_HEARTBEAT_INTERVAL_MS),
     streamInboxBytes: z.number().step(1).min(1).default(DEFAULT_STREAM_INBOX_BYTES),
+    websocketCompression: z.boolean().default(true),
   })
 
   /** Carrier adapter shared by the WebSocket mux and local Host transports. */
@@ -245,6 +252,7 @@ export class TypertGatewayService extends Service implements TypertGateway {
           this.wireStream.failure,
           resolved.websocketHeartbeatIntervalMs,
           resolved.streamInboxBytes,
+          resolved.websocketCompression,
         )
         webCtx.effect(function* () {
           yield () => mux.close()

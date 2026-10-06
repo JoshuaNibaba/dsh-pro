@@ -52,6 +52,23 @@ describe('Remote stream mux server carrier lifecycle', () => {
     await closed
   })
 
+  it.each([
+    { compression: true, extensions: 'permessage-deflate' },
+    { compression: false, extensions: '' },
+  ])('negotiates permessage-deflate only when compression is $compression', async ({ compression, extensions }) => {
+    const entry = await startMux(
+      async (_endpoint, _payload, _uplink, _peer, control) => waitForAbort(control.signal),
+      2_000,
+      262_144,
+      undefined,
+      compression,
+    )
+    const client = await connect(entry.url)
+    expect(client.extensions).toBe(extensions)
+    client.close()
+    await once(client, 'close')
+  })
+
   it('requires two missed heartbeats before terminating an unresponsive socket', async () => {
     const entry = await startMux(async (_endpoint, _payload, _uplink, _peer, control) => waitForAbort(control.signal), 20)
     const client = await connect(entry.url)
@@ -500,9 +517,10 @@ async function startMux(
   heartbeatIntervalMs = 2_000,
   streamInboxBytes = 262_144,
   peer?: PeerScope,
+  compression = true,
 ): Promise<RunningMux> {
   const admitted = peer ?? await fixturePeer()
-  const mux = new RemoteStreamMuxServer(open, mapFailure, heartbeatIntervalMs, streamInboxBytes)
+  const mux = new RemoteStreamMuxServer(open, mapFailure, heartbeatIntervalMs, streamInboxBytes, compression)
   const http = createServer()
   http.on('upgrade', (request, socket, head) => { mux.handleUpgrade(request, socket, head, admitted) })
   await new Promise<void>((resolve, reject) => {

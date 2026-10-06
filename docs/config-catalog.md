@@ -193,6 +193,11 @@ export interface Config {
   readonly websocketHeartbeatIntervalMs?: number
   /** Buffered uplink frame bytes one logical stream may hold before it fails with `gateway/uplink-overflow`. @default 262144 */
   readonly streamInboxBytes?: number
+  /**
+   * Accept the browser's permessage-deflate offer on the Remote stream WebSocket. Session
+   * history snapshots are JSON and shrink several-fold, at the cost of one zlib context per socket. @default true
+   */
+  readonly websocketCompression?: boolean
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-api-gateway -->
