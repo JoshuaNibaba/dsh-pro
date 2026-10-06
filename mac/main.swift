@@ -47,6 +47,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     var webFellBack = false
 
     func applicationDidFinishLaunching(_ n: Notification) {
+        // The Dock may hold a cached icon from an earlier version at the same path.
+        if let icon = NSImage(named: "AppIcon") { NSApp.applicationIconImage = icon }
         buildMenu()
         let config = WKWebViewConfiguration()
         config.websiteDataStore = .default()
