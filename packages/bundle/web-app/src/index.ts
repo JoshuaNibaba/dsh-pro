@@ -248,7 +248,9 @@ export function apply(ctx: Context, config: Config): void {
   const handoffBrowser = config.openBrowser && !launchedThroughSsh(launchEnvironmentOf(ctx))
   // Release dependent rows only after bind-dependent trust has been sampled once.
   ctx.provide(WEB_RUNTIME_SERVICE, runtime)
-  ctx.plugin(FrontendStatic, { distIndex: internals.resolveDistIndex() })
+  // The frontend's Vite build names every file under assets/ `[name]-[hash]`
+  // (apps/web/vite.config.ts), so those URLs change whenever their bytes do.
+  ctx.plugin(FrontendStatic, { distIndex: internals.resolveDistIndex(), immutablePrefixes: ['assets/'] })
   if (config.surfaceContext) {
     ctx.inject(['systemPrompt'], (promptCtx) => {
       addHarnessSourceSection(promptCtx, SOURCE_ROOT)

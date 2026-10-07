@@ -6,9 +6,12 @@
  * unknown extensions ship as octet-stream, and non-GET/HEAD is 405. Every
  * index response first passes Connection's browser authentication, then the
  * webserver's index render (structured injection rows, then raw taps).
- * Non-index assets stay public. The dist location is workspace knowledge of
- * the composing application, so `distIndex` is typically supplied through a
- * `!!js` expression, never hardcoded by a deployment.
+ * Non-index assets stay public. Files under a configured content-hashed
+ * prefix carry a one-year immutable `Cache-Control`; every other response
+ * carries none. The dist location and its hashed layout are workspace
+ * knowledge of the composing application, so `distIndex` and
+ * `immutablePrefixes` are supplied by that application, never hardcoded by a
+ * deployment.
  * @module @deepseek-ai/dsh-host-frontend-static
  */
 
@@ -26,17 +29,30 @@ export const name = 'frontend-static'
 /** Services required before the authenticated fallback seat can be claimed. */
 export const inject = ['webServer', 'connection']
 
-/** Plugin config: the dist anchor. */
+/** Plugin config: the dist anchor and its content-hashed directories. */
 export interface Config {
   /** Absolute path of index.html inside the dist root. */
   distIndex: string
+  /**
+   * Dist-relative directories, `/`-separated and ending in `/` (for example `assets/`), whose
+   * files are named by content hash. A changed file therefore has a new URL, so responses under
+   * them may be cached for a year without revalidation.
+   */
+  immutablePrefixes?: string[]
 }
 
-export const Config: z<Config> = z.object({
+/** {@link Config} after schema defaults are applied. */
+export type ResolvedConfig = Config & { immutablePrefixes: string[] }
+
+export const Config: z<Config, ResolvedConfig> = z.object({
   distIndex: z.string().required(),
+  immutablePrefixes: z.array(z.string().pattern(/^[^/\\].*\/$/)).default([]),
 })
 
 const HTML_MIME = 'text/html; charset=utf-8'
+
+/** Cache policy for a URL whose bytes can never change. */
+const IMMUTABLE_CACHE = 'public, max-age=31536000, immutable'
 
 const MIME: Record<string, string> = {
   '.html': HTML_MIME,
@@ -67,11 +83,14 @@ const STATIC_MISS_CODES: ReadonlySet<string | undefined> = new Set([
  * @param authorizeIndex - authenticates an index response before its bytes are read.
  * @param renderIndex - produces the index.html body (structured injection
  * rendering) for the dist root and configured index path.
+ * @param immutablePrefixes - dist-relative content-hashed directories; files
+ * under them are served with an immutable `Cache-Control`.
  */
 export async function serveStatic(
   pathname: string, res: ServerResponse, distRoot: string, distIndex: string,
   authorizeIndex: () => boolean,
   renderIndex: () => Promise<string>,
+  immutablePrefixes: readonly string[],
 ): Promise<void> {
   const target = resolve(normalize(join(distRoot, pathname)))
   // Traversal rejection: the target must be distRoot itself (`/`) or stay under
@@ -83,15 +102,17 @@ export async function serveStatic(
     return
   }
   let body: string | Buffer
-  let type: string
+  const headers: Record<string, string> = {}
   try {
     if (target === distRoot || target === distIndex) {
       if (!authorizeIndex()) return
       body = await renderIndex()
-      type = HTML_MIME
+      headers['content-type'] = HTML_MIME
     } else {
       body = await readFile(target)
-      type = MIME[extname(target)] ?? 'application/octet-stream'
+      headers['content-type'] = MIME[extname(target)] ?? 'application/octet-stream'
+      const relative = target.slice(distRoot.length + 1).split(sep).join('/')
+      if (immutablePrefixes.some(prefix => relative.startsWith(prefix))) headers['cache-control'] = IMMUTABLE_CACHE
     }
   } catch (error) {
     // Only absent or non-file targets are 404; other filesystem failures reach
@@ -101,16 +122,16 @@ export async function serveStatic(
     res.end()
     return
   }
-  res.writeHead(200, { 'content-type': type })
+  res.writeHead(200, headers)
   res.end(body)
 }
 
 /**
  * Claim the webserver fallback seat and serve the dist.
  * @param ctx - plugin context carrying the webServer service.
- * @param config - validated {@link Config}.
+ * @param config - validated {@link Config} with defaults applied.
  */
-export function apply(ctx: Context, config: Config): void {
+export function apply(ctx: Context, config: ResolvedConfig): void {
   const distIndex = config.distIndex
   const distRoot = dirname(distIndex)
   // Insert after all index transforms so the base precedes every resource reference.
@@ -135,6 +156,7 @@ export function apply(ctx: Context, config: Config): void {
       distIndex,
       () => ctx.connection.authorizeIndex(req, res),
       renderIndex,
+      config.immutablePrefixes,
     )
   }), 'frontend-static: fallback seat')
 }

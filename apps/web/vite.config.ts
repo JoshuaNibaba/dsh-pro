@@ -193,6 +193,8 @@ export default defineConfig({
         entryFileNames(chunk): string {
           return chunk.name === 'bootstrap' ? 'preview/[name]-[hash].js' : 'assets/[name]-[hash].js'
         },
+        // Every file under assets/ carries its content hash: dsh-web-app serves
+        // that directory with an immutable Cache-Control.
         // Output layout: the two main chunks stay at assets/ root; lazy
         // @shikijs/langs grammar chunks group under assets/langs/; fonts
         // (all KaTeX faces referenced by vendor.css) group under
