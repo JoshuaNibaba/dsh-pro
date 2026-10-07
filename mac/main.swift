@@ -107,7 +107,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         quitting = true
         recovery.stop()
         networkMonitor.cancel()
-        tunnel.close()
+        tunnel.shutdown()
     }
 
     // MARK: status page

@@ -105,7 +105,7 @@ final class Tunnel {
         process = p
     }
 
-    func close() {
+    func shutdown() {
         lock.lock()
         defer { lock.unlock() }
         closed = true

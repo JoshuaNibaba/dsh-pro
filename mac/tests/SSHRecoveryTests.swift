@@ -87,7 +87,7 @@ struct SSHRecoveryTests {
         try script.write(to: executable, atomically: true, encoding: .utf8)
         try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: executable.path)
         let tunnel = Tunnel(executableURL: executable)
-        defer { tunnel.close() }
+        defer { tunnel.shutdown() }
         let scheduler = ManualScheduler()
         let recovery = SSHRecovery(schedule: scheduler.schedule)
         recovery.start()
@@ -126,7 +126,7 @@ struct SSHRecoveryTests {
             (try? String(contentsOf: root.appendingPathComponent("attempts"), encoding: .utf8).trimmed) == "4"
         }
         precondition(exits == 2, "Stopping an old process must not report loss of its replacement")
-        tunnel.close()
+        tunnel.shutdown()
         precondition(!tunnel.isRunning)
         do {
             try tunnel.start(settings)
