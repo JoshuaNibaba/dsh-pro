@@ -95,11 +95,13 @@ export function useChatScroll(input: ChatScrollInput): ChatScrollState {
       resize: () => {
         if (!navigation.contentCommitted()) reading.onResize()
         navigation.reconcile()
+        navigation.autoLoad()
       },
     })
     const disconnectReading = reading.connect((sample) => {
       navigation.readerSampled(sample)
       processContent()
+      navigation.autoLoad()
     })
     return () => {
       disconnectViewport()
@@ -119,8 +121,9 @@ export function useChatScroll(input: ChatScrollInput): ChatScrollState {
     if (layoutChanged) viewport.invalidate()
     processContent()
     if (layoutChanged) reading.refreshActiveTurn()
+    navigation.autoLoad()
   }, [
-    viewport, reading, processContent, navigationInput, ready, order, lastKey, lastIsUser,
+    viewport, reading, navigation, processContent, navigationInput, ready, order, lastKey, lastIsUser,
     steeringId, submissionId, running, loadedTurns, chatScroll,
   ])
 

@@ -4011,6 +4011,43 @@ describe('ChatView', () => {
     expect(view.getByText('加载中…')).toBeTruthy()
   })
 
+  it('loads older history once per window head when a reader settles within one viewport of the top', () => {
+    const h = makeHarness({ nodes: [user(5, 'later'), assistant(6, 'a')] }, { hasMore: true })
+    const view = render(<h.ChatView {...h.props} />)
+    const scroller = view.container.querySelector('[data-chat-flow]')!.parentElement as HTMLDivElement
+    installScrollMetrics(scroller, 1_000, 300)
+    readerScroll(scroller, 500)
+    expect(h.loadOlder).not.toHaveBeenCalled()
+    readerScroll(scroller, 100)
+    expect(h.loadOlder).toHaveBeenCalledTimes(1)
+    expect(view.container.querySelector('[data-chat-following-tail]')).toBeNull()
+    // The same head is not requested again, so a failed page waits for the button.
+    readerScroll(scroller, 50)
+    expect(h.loadOlder).toHaveBeenCalledTimes(1)
+    act(() => { h.setChat({ nodes: [user(1, 'old'), assistant(2, 'b'), user(5, 'later'), assistant(6, 'a')] }) })
+    readerScroll(scroller, 20)
+    expect(h.loadOlder).toHaveBeenCalledTimes(2)
+  })
+
+  it('fills a short window from history while keeping bottom-follow ownership', () => {
+    const h = makeHarness({ nodes: [user(5, 'later')] }, { hasMore: true })
+    const view = render(<h.ChatView {...h.props} />)
+    const scroller = view.container.querySelector('[data-chat-flow]')!.parentElement as HTMLDivElement
+    const metrics = installScrollMetrics(scroller, 200, 300)
+    act(() => { h.setChat({ nodes: [user(5, 'later'), assistant(6, 'a')] }) })
+    expect(h.loadOlder).toHaveBeenCalledTimes(1)
+    expect(view.container.querySelector('[data-chat-following-tail]')).not.toBeNull()
+    act(() => { h.setSession({ loadingOlder: true }) })
+    metrics.setHeight(1_000)
+    act(() => {
+      h.setChat({ nodes: [user(1, 'old'), assistant(2, 'b'), user(5, 'later'), assistant(6, 'a')] })
+      h.setSession({ loadingOlder: false })
+    })
+    expect(scroller.scrollTop).toBe(700)
+    expect(h.loadOlder).toHaveBeenCalledTimes(1)
+    expect(view.container.querySelector('[data-chat-following-tail]')).not.toBeNull()
+  })
+
   it('shows open error and loading states', () => {
     const h = makeHarness({}, {
       openState: 'error',

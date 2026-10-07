@@ -26,6 +26,8 @@ interface TurnJump {
 export class ChatNavigation {
   private jump: TurnJump | null = null
   private settleFrame: number | null = null
+  /** Window head of the last automatic request; a failed page leaves the head unchanged and is not retried. */
+  private autoHead: ChatNavigationInput['firstSeq'] | undefined = undefined
 
   constructor(
     private readonly viewport: ChatViewport,
@@ -43,6 +45,7 @@ export class ChatNavigation {
   /** Cancel navigation when opening a Chat view. */
   reset(): void {
     this.cancel()
+    this.autoHead = undefined
   }
 
   /** Cancel local callbacks; late history completions cannot revive a task. */
@@ -96,6 +99,22 @@ export class ChatNavigation {
     this.viewport.beginPaging()
     this.reading.pauseFollowing()
     this.input.loadOlder()
+  }
+
+  /**
+   * Request one older page while the window's top is less than one viewport above the visible area.
+   * Bottom-follow ownership keeps the tail in place; otherwise the first loaded row keeps its position.
+   * Each window head is requested at most once, so a failed page waits for the explicit control.
+   */
+  autoLoad(): void {
+    const { hasMore, loadingOlder, firstSeq } = this.input
+    if (!hasMore || loadingOlder || firstSeq === this.autoHead || this.jump !== null
+      || this.reading.pending || this.viewport.preserving) return
+    const scroll = this.viewport.readScroll()
+    if (scroll === null || scroll.metrics.top >= scroll.metrics.height) return
+    this.autoHead = firstSeq
+    if (this.reading.followingTail) this.input.loadOlder()
+    else this.loadEarlier()
   }
 
   /**

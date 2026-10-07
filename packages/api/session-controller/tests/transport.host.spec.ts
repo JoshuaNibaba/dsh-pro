@@ -523,6 +523,8 @@ describe('SessionHistoryController', () => {
       { address, throughSeq: -1, maxMessages: 20, turnWindow: { minMessages: 21, minTurns: 2 } },
       { address, throughSeq: -1, turnWindow: { minMessages: 50, minTurns: 0 } },
       { address, throughSeq: -1, turnWindow: { minMessages: 50, minTurns: 1.5 } },
+      { address, throughSeq: -1, turnWindow: { minMessages: 50, minTurns: 2, maxTurns: 1 } },
+      { address, throughSeq: -1, turnWindow: { minMessages: 50, minTurns: 2, maxTurns: 2.5 } },
     ]) {
       await expect(transport.page(request, signal())).rejects.toMatchObject({ code: 'gateway/bad-request' })
     }
@@ -549,6 +551,7 @@ describe('SessionHistoryController', () => {
       { minMessages: 51, minTurns: 2 },
       { minMessages: 50, minTurns: 0 },
       { minMessages: 50, minTurns: 1.5 },
+      { minMessages: 50, minTurns: 2, maxTurns: 1 },
     ]) {
       const iterator = transport.follow({ address, turnWindow }, signal())[Symbol.asyncIterator]()
       await expect(iterator.next()).rejects.toMatchObject({ code: 'gateway/bad-request' })

@@ -331,6 +331,10 @@ function validateHistoryWindow(request: Pick<SessionPageRequest, 'maxMessages' |
     if (!Number.isSafeInteger(window.minTurns) || window.minTurns <= 0) {
       throw new RemoteError('gateway/bad-request', 'turnWindow.minTurns must be a positive safe integer', {})
     }
+    if (window.maxTurns !== undefined
+      && (!Number.isSafeInteger(window.maxTurns) || window.maxTurns < window.minTurns)) {
+      throw new RemoteError('gateway/bad-request', 'turnWindow.maxTurns must be a safe integer no less than minTurns', {})
+    }
   }
 }
 
@@ -404,7 +408,8 @@ function paginate(
     const event = events[index] as SessionEvent
     if (turnWindow !== undefined && event.type === 'turn/start') {
       turns++
-      if (count >= turnWindow.minMessages && turns >= turnWindow.minTurns) {
+      if ((count >= turnWindow.minMessages && turns >= turnWindow.minTurns)
+        || (turnWindow.maxTurns !== undefined && turns >= turnWindow.maxTurns)) {
         cut = SessionLogOffset(index)
         break
       }

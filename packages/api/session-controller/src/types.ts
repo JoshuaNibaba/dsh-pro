@@ -474,12 +474,14 @@ export interface SessionPageRequest {
   readonly throughSeq: number
   readonly beforeSeq?: number
   readonly maxMessages?: number
-  /** Stop at a Turn start after both minima, unless maxMessages or history exhaustion wins. */
+  /** Stop at a Turn start after both minima or maxTurns, unless maxMessages or history exhaustion wins. */
   readonly turnWindow?: {
     /** Minimum append-origin user/assistant messages; must not exceed maxMessages. */
     readonly minMessages: number
     /** Minimum Turn starts crossed, including the partial Turn at beforeSeq. */
     readonly minTurns: number
+    /** Turn starts after which the page stops even below minMessages; at least minTurns. */
+    readonly maxTurns?: number
   }
 }
 

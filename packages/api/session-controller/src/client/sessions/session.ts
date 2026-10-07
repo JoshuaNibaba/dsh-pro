@@ -48,17 +48,23 @@ function projectionsBaseline(value: SessionProjectionBaseline): ProjectionsBasel
   }
 }
 
-/** Minimum message count for ordinary history windows. */
-export const PAGE_MESSAGES = 20
+/** Message count that ends an ordinary history window at a Turn start before PAGE_TURNS. */
+export const PAGE_MESSAGES = 40
 
-const HISTORY_PAGE_OPTIONS = { maxMessages: 500, turnWindow: { minMessages: PAGE_MESSAGES, minTurns: 1 } }
+/** Turns after which an ordinary history window ends even below PAGE_MESSAGES. */
+export const PAGE_TURNS = 3
+
+const HISTORY_PAGE_OPTIONS = {
+  maxMessages: 500,
+  turnWindow: { minMessages: PAGE_MESSAGES, minTurns: 1, maxTurns: PAGE_TURNS },
+}
 
 /** Minimum messages per page while a turn jump loops backwards. */
 export const JUMP_PAGE_MESSAGES = 200
 
 const JUMP_PAGE_OPTIONS = {
-  ...HISTORY_PAGE_OPTIONS,
-  turnWindow: { ...HISTORY_PAGE_OPTIONS.turnWindow, minMessages: JUMP_PAGE_MESSAGES },
+  maxMessages: HISTORY_PAGE_OPTIONS.maxMessages,
+  turnWindow: { minMessages: JUMP_PAGE_MESSAGES, minTurns: 1 },
 }
 
 interface PendingHistory {

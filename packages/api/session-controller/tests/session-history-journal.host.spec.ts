@@ -757,7 +757,9 @@ describe('Session history raw journal', () => {
     { name: 'steering within one Turn', replies: [9, 39, 39], beforeMessage: undefined, firstTurn: 2, steering: true },
     { name: 'exhausted history below both minima', replies: [9], beforeMessage: undefined, firstTurn: 1, steering: false },
     { name: 'the 500-message cap inside one Turn', replies: [9, 600], beforeMessage: undefined, firstTurn: undefined, steering: false },
-  ])('paginates $name in one contiguous Turn window', async ({ replies, beforeMessage, firstTurn, steering, minMessages = 50 }) => {
+    { name: 'short Turns until the Turn cap', replies: [9, 9, 9, 9, 9, 9], beforeMessage: undefined, firstTurn: 4, steering: false, maxTurns: 3 },
+    { name: 'long Turns before the Turn cap', replies: [9, 39, 39], beforeMessage: undefined, firstTurn: 2, steering: false, maxTurns: 3 },
+  ])('paginates $name in one contiguous Turn window', async ({ replies, beforeMessage, firstTurn, steering, minMessages = 50, maxTurns }) => {
     const { ctx } = await harness()
     onTestFinished(() => ctx.fiber.dispose())
     const remote = createSessionTestRemote(ctx, { defaultModelSelection: () => ({ provider: 'p', model: 'm' }), cwd: '/tmp' })
@@ -783,7 +785,7 @@ describe('Session history raw journal', () => {
       throughSeq: session.seq - 1,
       beforeSeq,
       maxMessages: 500,
-      turnWindow: { minMessages, minTurns: 2 },
+      turnWindow: { minMessages, minTurns: 2, ...maxTurns === undefined ? {} : { maxTurns } },
     })
     if (!response.ok) throw new Error('expected a history page')
     const page = pageEvents(response.value)
@@ -802,7 +804,7 @@ describe('Session history raw journal', () => {
       const stream = remote.follow({
         address: { kind: 'session', sessionId: session.id },
         maxMessages: 500,
-        turnWindow: { minMessages, minTurns: 2 },
+        turnWindow: { minMessages, minTurns: 2, ...maxTurns === undefined ? {} : { maxTurns } },
       }, abort.signal)[Symbol.asyncIterator]()
       try {
         await expect(stream.next()).resolves.toMatchObject({
