@@ -40,6 +40,10 @@ async function loadComposition(): Promise<Context> {
   await writeFile(join(dist, 'blob.bin'), 'BLOB')
   await writeFile(join(dist, 'manifest.webmanifest'), '{}')
   await mkdir(join(dist, 'empty'))
+  await mkdir(join(dist, 'assets', 'langs'), { recursive: true })
+  await writeFile(join(dist, 'assets', 'index-abc123.js'), 'export const hashed = 1')
+  await writeFile(join(dist, 'assets', 'langs', 'bat-def456.js'), 'export {}')
+  await writeFile(join(dist, 'assets-index.js'), 'export {}')
   const configPath = join(root, 'cordis.yml')
   await writeFile(configPath, [
     "- name: '@deepseek-ai/dsh-credentials-local'",
@@ -55,6 +59,7 @@ async function loadComposition(): Promise<Context> {
     "  name: '@deepseek-ai/dsh-host-frontend-static'",
     '  config:',
     `    distIndex: '${distIndex}'`,
+    "    immutablePrefixes: ['assets/']",
     '',
   ].join('\n'))
 
@@ -92,6 +97,17 @@ async function request(port: number, path: string, init?: RequestInit): Promise<
     body: await response.text(),
   }
 }
+
+describe('config', () => {
+  it('accepts only relative directory prefixes as content-hashed paths', () => {
+    expect(new FrontendStatic.Config({ distIndex: '/dist/index.html' }).immutablePrefixes).toEqual([])
+    expect(new FrontendStatic.Config({ distIndex: '/dist/index.html', immutablePrefixes: ['assets/'] }).immutablePrefixes)
+      .toEqual(['assets/'])
+    for (const prefix of ['assets', '/assets/', '\\assets/', '']) {
+      expect(() => new FrontendStatic.Config({ distIndex: '/dist/index.html', immutablePrefixes: [prefix] })).toThrow()
+    }
+  })
+})
 
 describe('real Loader composition', () => {
   it('serves explicit index entries and files while preserving HTTP error semantics', { timeout: 60_000 }, async () => {
@@ -138,6 +154,19 @@ describe('real Loader composition', () => {
 
     // Unknown extension ships as octet-stream.
     expect(await request(port, '/blob.bin')).toMatchObject({ status: 200, type: 'application/octet-stream', body: 'BLOB' })
+
+    // Only files under a configured content-hashed directory may be cached
+    // without revalidation; a root file sharing the prefix's spelling and the
+    // index never are.
+    const cacheOf = async (path: string, init?: RequestInit): Promise<string | null> =>
+      (await fetch(`http://127.0.0.1:${String(port)}${path}`, init)).headers.get('cache-control')
+    expect(await request(port, '/assets/index-abc123.js')).toMatchObject({ status: 200, body: 'export const hashed = 1' })
+    expect(await cacheOf('/assets/index-abc123.js')).toBe('public, max-age=31536000, immutable')
+    expect(await cacheOf('/assets/langs/bat-def456.js', { method: 'HEAD' })).toBe('public, max-age=31536000, immutable')
+    expect(await cacheOf('/assets-index.js')).toBeNull()
+    expect(await cacheOf('/app.js')).toBeNull()
+    expect(await cacheOf('/', authenticated())).toBeNull()
+    expect(await cacheOf('/assets/missing-000.js')).toBeNull()
 
     // Only the root and index path render index.html through registered taps.
     const untap = server.tapIndex(html => html.replace('<head>', '<head><script>window.__T__=1</script>'))

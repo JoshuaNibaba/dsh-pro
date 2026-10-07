@@ -1435,13 +1435,19 @@ export interface Config {
 ## `@deepseek-ai/dsh-host-frontend-static`
 
 - `inject`: `webServer` · `connection`
-- `source`: [`packages/host/frontend-static/src/index.ts:30`](../packages/host/frontend-static/src/index.ts)
+- `source`: [`packages/host/frontend-static/src/index.ts:33`](../packages/host/frontend-static/src/index.ts)
 
 ```ts config-catalog
-/** Plugin config: the dist anchor. */
+/** Plugin config: the dist anchor and its content-hashed directories. */
 export interface Config {
   /** Absolute path of index.html inside the dist root. */
   distIndex: string
+  /**
+   * Dist-relative directories, `/`-separated and ending in `/` (for example `assets/`), whose
+   * files are named by content hash. A changed file therefore has a new URL, so responses under
+   * them may be cached for a year without revalidation.
+   */
+  immutablePrefixes: string[]
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-host-frontend-static -->

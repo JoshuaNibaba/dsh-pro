@@ -66,6 +66,8 @@ function stageDist(): string {
   mkdirSync(join(dist, 'dist'))
   const index = join(dist, 'dist', 'index.html')
   writeFileSync(index, '<head></head><body>shell</body>')
+  mkdirSync(join(dist, 'dist', 'assets'))
+  writeFileSync(join(dist, 'dist', 'assets', 'index-abc123.js'), 'export {}')
   internals.resolveDistIndex = () => index
   return index
 }
@@ -141,6 +143,11 @@ describe('web-app runtime glue', () => {
     await new Promise(resolve => setTimeout(resolve, 0))
 
     expect(seat()).toBeDefined() // frontend-static claimed the fallback
+    // The frontend's content-hashed assets directory is served as immutable.
+    const written: Array<Record<string, string>> = []
+    const respond = { writeHead: (_status: number, headers: Record<string, string>) => { written.push(headers) }, end: () => {} }
+    await (seat() as (req: unknown, res: unknown) => Promise<void>)({ method: 'GET', url: '/assets/index-abc123.js' }, respond)
+    expect(written).toEqual([{ 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'public, max-age=31536000, immutable' }])
     expect(ctx.get('webRuntime')).toEqual({
       lanAddresses: ['192.168.1.5'],
       trustedHosts: ['192.168.1.5', 'lab.internal'],
