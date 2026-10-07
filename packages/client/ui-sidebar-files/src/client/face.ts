@@ -11,6 +11,10 @@
  * the endpoint answers with the directory's workspace-relative path as well,
  * which the tree has no use for and drops.
  *
+ * A download reads the file through the same namespace's `readBytes`, one
+ * Host-capped byte window after another, and hands the assembled bytes to the
+ * browser's download manager; it never holds a second copy in the store.
+ *
  * One level has one listing in force: asking for a level again — the reload
  * gesture, a directory reopened after a reset — retires the listing still in
  * flight for it, whose settlement then writes nothing. Cleanup rides the owner's
@@ -22,7 +26,7 @@ import type { ClientRemote, RemoteResult } from '@deepseek-ai/dsh-api-remotes/cl
 import type { BoundActions } from '@deepseek-ai/dsh-client-store'
 import type { TabId } from '@deepseek-ai/dsh-client-ui-dockkit'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import type { DirLevel, createFilesStore } from './store.ts'
+import type { DirLevel, DownloadFailure, createFilesStore } from './store.ts'
 import type { WorkspaceFileWatchFrame } from '@deepseek-ai/dsh-api-workspace-files/types'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 import { DirectoryNode } from './directory-node.ts'
@@ -99,6 +103,64 @@ export function createList(remote: WorkspaceFilesListRemote): ListWorkspaceDirec
   }
 }
 
+/** One file read completely for saving, or why the read stopped. */
+export type FileReadOutcome =
+  | { readonly ok: true; readonly data: Blob }
+  | { readonly ok: false; readonly failure: DownloadFailure }
+
+/**
+ * Read one complete file for download.
+ * @param sessionId - Session whose workspace resolves the path.
+ * @param path - absolute file path.
+ * @param signal - the tab record's lifetime.
+ * @returns the file's bytes, or why they could not be read as one version.
+ */
+export type ReadWorkspaceFile = (sessionId: SessionId, path: string, signal: AbortSignal) => Promise<FileReadOutcome>
+
+/** The slice of the Client Remote face a download calls: `workspaceFiles.readBytes`. */
+export type WorkspaceFilesReadBytesRemote = {
+  readonly workspaceFiles: Pick<ClientRemote['workspaceFiles'], 'readBytes'>
+}
+
+/**
+ * Hand bytes to the browser's download manager.
+ * @param data - the file's bytes.
+ * @param filename - the suggested saved file name.
+ */
+export type SaveFile = (data: Blob, filename: string) => void
+
+const CHANGED: FileReadOutcome = { ok: false, failure: { kind: 'changed' } }
+
+/**
+ * Bind complete-file reads to one Remote face.
+ *
+ * Each request names only its offset, so the Host applies its own window cap
+ * and the file has no size limit here. Every window must report the version of
+ * the first; otherwise the file changed mid-read and the windows would splice
+ * two versions together.
+ * @param remote - the Client Remote face carrying the `workspaceFiles` namespace.
+ * @returns the read a download performs.
+ */
+export function createReadFile(remote: WorkspaceFilesReadBytesRemote): ReadWorkspaceFile {
+  return async (sessionId, path, signal) => {
+    const parts: Blob[] = []
+    let offset = 0
+    let version: string | undefined
+    for (;;) {
+      const result = await remote.workspaceFiles.readBytes(sessionId, path, { range: { offset } }, signal)
+      if (!result.ok) return { ok: false, failure: { kind: 'remote', failure: result.error } }
+      const window = result.value
+      if (version !== undefined && window.version !== version) return CHANGED
+      version = window.version
+      parts.push(new Blob([window.data]))
+      offset += window.data.length
+      if (window.eof) return { ok: true, data: new Blob(parts, { type: 'application/octet-stream' }) }
+      // An empty window without EOF means the file shrank after its stat.
+      if (window.data.length === 0) return CHANGED
+    }
+  }
+}
+
 /**
  * The absolute path of one child entry.
  *
@@ -141,17 +203,30 @@ export interface FilesInjected {
    * @param signal - the tab record's lifetime.
    */
   readonly toggle: (tabId: TabId, parentPath: string, path: string, expanded: readonly string[], signal: AbortSignal) => void
+  /**
+   * Read one file completely and hand it to the browser's download manager.
+   * A request for a path already downloading in this tab is ignored.
+   * @param tabId - the tab being drawn.
+   * @param path - absolute file path.
+   * @param filename - the suggested saved file name.
+   * @param signal - the tab record's lifetime; aborting it drops the result.
+   */
+  readonly download: (tabId: TabId, path: string, filename: string, signal: AbortSignal) => void
 }
 
 /**
- * Bind the tree's face to one directory listing.
+ * Bind the tree's face to one directory listing and one file transfer.
  * @param list - the bound `workspaceFiles.list` call.
  * @param watch - target-scoped directory observation.
+ * @param read - the bound complete-file read a download performs.
+ * @param save - the browser save operation.
  * @returns the Slot `inject` factory: session and bound actions in, face out.
  */
 export function filesFace(
   list: ListWorkspaceDirectory,
   watch: WatchWorkspaceDirectory,
+  read: ReadWorkspaceFile,
+  save: SaveFile,
 ): (sessionId: SessionId, actions: BoundActions<ReturnType<typeof createFilesStore>>) => FilesInjected {
   return (
     sessionId: SessionId,
@@ -160,6 +235,8 @@ export function filesFace(
     /** Per tab, per absolute path: the listing generation a settlement must match; the latest request wins. */
     const generations = new Map<TabId, Map<string, number>>()
     const roots = new Map<TabId, DirectoryNode>()
+    /** Per tab: absolute paths whose download is reading. */
+    const downloading = new Map<TabId, Set<string>>()
     const nextGeneration = (tabId: TabId, path: string): number => {
       const byPath = generations.get(tabId) ?? new Map<string, number>()
       generations.set(tabId, byPath)
@@ -192,6 +269,7 @@ export function filesFace(
           void roots.get(tabId)?.close()
           roots.delete(tabId)
           generations.delete(tabId)
+          downloading.delete(tabId)
           actions.forget(tabId)
         }, { once: true })
         roots.set(tabId, new DirectoryNode(root,
@@ -215,6 +293,26 @@ export function filesFace(
         if (collapsing) void parent?.collapse(path)
         else parent?.expand(path, next)
         actions.toggled(tabId, path)
+      },
+      download(tabId, path, filename, signal) {
+        const active = downloading.get(tabId) ?? new Set<string>()
+        if (signal.aborted || active.has(path)) return
+        active.add(path)
+        downloading.set(tabId, active)
+        actions.downloading(tabId, path)
+        const settle = (outcome: FileReadOutcome): void => {
+          active.delete(path)
+          if (signal.aborted) return
+          if (!outcome.ok) {
+            actions.downloadFailed(tabId, path, outcome.failure)
+            return
+          }
+          save(outcome.data, filename)
+          actions.downloaded(tabId, path)
+        }
+        void read(sessionId, path, signal).then(settle, (error: unknown) => {
+          settle({ ok: false, failure: { kind: 'remote', failure: new RemoteError('gateway/internal', error instanceof Error ? error.message : String(error), {}) } })
+        })
       },
     }
   }

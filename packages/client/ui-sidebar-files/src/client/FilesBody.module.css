@@ -89,6 +89,84 @@
   background: var(--dsw-alias-interactive-bg-hover);
 }
 
+/* A file row: the open button fills it and the download action sits at its
+   end. The hover fill moves from the open button to the whole row, so the
+   action reads as part of the row it downloads. */
+.fileRow {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  border-radius: var(--dsw-radius-md);
+}
+
+.fileRow:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.fileRow .row:hover {
+  background: transparent;
+}
+
+/* Hidden until the row is pointed at or focused, so the tree stays quiet;
+   devices without hover always show it, and a running download keeps it up. */
+.rowAction {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin-right: 4px;
+  padding: 4px;
+  color: var(--dsw-alias-label-secondary);
+  background: transparent;
+  border: none;
+  border-radius: var(--dsw-radius-sm);
+  cursor: pointer;
+  opacity: 0;
+}
+
+.rowAction svg {
+  width: 15px;
+  height: 15px;
+}
+
+.fileRow:hover .rowAction,
+.fileRow:focus-within .rowAction,
+.rowAction[aria-busy='true'] {
+  opacity: 1;
+}
+
+.rowAction:hover {
+  color: var(--dsw-alias-label-primary);
+}
+
+.rowAction:disabled {
+  cursor: default;
+}
+
+@media (hover: none) {
+  .rowAction {
+    opacity: 1;
+  }
+}
+
+.spinner {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation: none;
+  }
+}
+
 /* The folder glyph rides the tertiary ink, as the workspace tree's does (ui-workspace Rows `.slot`). */
 .icon {
   flex: 0 0 auto;

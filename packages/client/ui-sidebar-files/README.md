@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Browse a Session's workspace tree and open files in Sidebar previews. The root and expanded directories refresh automatically from direct-entry watches; manual reload remains available. The tab is reached from the guide and claims no resource address.
+Browse a Session's workspace tree, open files in Sidebar previews, and download files to the browser. The root and expanded directories refresh automatically from direct-entry watches; manual reload remains available. The tab is reached from the guide and claims no resource address.
 
 ## Table of Contents
 
@@ -30,7 +30,7 @@ The `workspace.files` command opens or focuses the file page in the focused pane
 - **The body** — the keyed `sidebar.right.pane.tab` seat under that id: a header row under the strip, then the tree. The shared [`PathLabel`](../ui-primitives/README.md#component-catalog) displays the root path with subdued directories and a primary final segment. A clipped path retains its trailing characters with a left-edge fade; hovering reveals the full path. The reload control and the Session-scoped `sidebar.right.tab.files.actions` list stay at its right, with the displayed root passed as `absolutePath`; [`ui-open-in-app`](../ui-open-in-app/README.md) contributes the workspace directory opener.
 - **The chip title** — the keyed `sidebar.right.pane.tab.title` seat under that id: a shared `FileTypeIcon` folder glyph at 16px before the type's label. The tree's own rows never draw this sheet.
 
-Source files under `src/client/`: `definition.tsx` (the type), `store.ts` (what it keeps), `face.ts` (Remote reads and watches), `directory-node.ts` (open directories and their lifetimes), `FilesBody.tsx` (what it draws, with its ordering and failure-line helpers), `FilesTitle.tsx` (the chip title), `locales.ts` (what it says), and `index.ts` (the wiring).
+Source files under `src/client/`: `definition.tsx` (the type), `store.ts` (what it keeps), `face.ts` (Remote reads and watches), `save.ts` (the browser download hand-off), `directory-node.ts` (open directories and their lifetimes), `FilesBody.tsx` (what it draws, with its ordering and failure-line helpers), `FilesTitle.tsx` (the chip title), `locales.ts` (what it says), and `index.ts` (the wiring).
 
 <a id="the-tree"></a>
 ## The tree
@@ -40,14 +40,21 @@ The root is the session's working directory, read from `useSessions().byId[sessi
 | Entry type | Row |
 |---|---|
 | `directory` | Toggles; reopening lists again and restores still-present expanded descendants. Displayed entries remain cached while collapsed. |
-| `file` | Opens `dsh-resource://file/session/<sessionId>/<encoded path relative to the root>`, built by `fileAddressFor` from `@deepseek-ai/dsh-util-workspace-path` from the entry's absolute path and the tree's root, through `useTabInfo().tab.actions.openResource`, landing in the tab's own pane. |
+| `file` | Opens `dsh-resource://file/session/<sessionId>/<encoded path relative to the root>`, built by `fileAddressFor` from `@deepseek-ai/dsh-util-workspace-path` from the entry's absolute path and the tree's root, through `useTabInfo().tab.actions.openResource`, landing in the tab's own pane. Its download control, at the row's end, saves the file instead (see [Downloads](#downloads)). |
 | `other` | Shown greyed and not clickable, so the directory is reported whole. |
 
 A level cut by the endpoint's entry cap ends with a marker; an empty level says so; a level that failed shows one line per code — `workspace-file/not-found`, `outside-workspace`, `not-directory` — and the transport's own message otherwise. Reload refreshes the root and expanded levels in place, retaining displayed entries during reads instead of resetting the whole tree; collapsed levels are fetched again when they next open. A session without a working directory shows a single line instead of a tree.
 
-State lives in the type's own store, bucketed by tab id: `root`, `levels` (loading / ready / failed per absolute path), `expanded`, `autoRefresh`, and `scrollTop`, which the body tracks locally while scrolling and commits once when it unmounts. Because the store outlives the body, switching to another sidebar tab and back remounts the tree with its levels intact and its scroll offset restored. The owner's `signal` ends a bucket: on abort the tab is forgotten, and neither a listing that settles afterwards nor the unmount's offset commit writes anything.
+State lives in the type's own store, bucketed by tab id: `root`, `levels` (loading / ready / failed per absolute path), `expanded`, `autoRefresh`, `downloads` (downloading / failed per absolute file path), and `scrollTop`, which the body tracks locally while scrolling and commits once when it unmounts. Because the store outlives the body, switching to another sidebar tab and back remounts the tree with its levels intact and its scroll offset restored. The owner's `signal` ends a bucket: on abort the tab is forgotten, and neither a listing that settles afterwards nor the unmount's offset commit writes anything.
 
 Each open `DirectoryNode` owns its target watch for the Tab lifetime; collapse closes that node and its hidden descendants. Expansion changes during ancestor restoration update the store and pending nodes, so restored descendants follow the latest expansion preferences. Automatic refresh defaults to enabled; its separate toggle is hidden while state, labels, styles, and toggle logic remain. Changes received during a directory read or its completion remain pending for another refresh.
+
+<a id="downloads"></a>
+### Downloads
+
+Every file row ends in a download button, shown while the row is hovered or focused and always on devices without hover. It reads the file through `remote.workspaceFiles.readBytes(sessionId, absolutePath, { range: { offset } })`, one window after another: each request names only its offset, so the Host's `maxBytes` window cap applies and the file has no size limit of its own. Every window must report the version of the first; a file modified mid-read fails as changed rather than saving two versions spliced together. The bytes are joined into one `application/octet-stream` Blob and handed to the browser through an object URL on a `download` anchor named after the entry, so the browser — or an embedding WebView's download delegate — saves the file instead of opening it; the URL is revoked a minute later.
+
+While a file is downloading its button shows a spinner and ignores further clicks; a second tab of this kind downloads independently. A failure is shown under the row — a missing file, a changed file, or the transport's own message — and is replaced by the next attempt. When the tab ends, a read still in flight saves nothing.
 
 <a id="model-experience"></a>
 ## Model Experience
@@ -56,12 +63,13 @@ None, as this package draws a workspace file tree in the browser and registers n
 
 #### KV Cache effect
 
-None; directory listings travel over the Remote and assemble no model request.
+None; directory listings and file downloads travel over the Remote and assemble no model request.
 
 ## Known Limitations and Deferred Work
 
 <a id="known-limitations-and-deferred-work"></a>
-- **Listing only.** No search, artifact filter, drag-and-drop, rename, context menu, or current-file highlight.
+- **Listing and file download only.** No search, artifact filter, drag-and-drop, rename, context menu, current-file highlight, or directory download.
+- **Downloads are buffered.** A download holds the complete file in browser memory before handing it over and shows no byte progress; a very large file is bounded by browser memory rather than by a cap here.
 - **One root.** The tree is rooted at the session's working directory; there is no way to browse above it, and the Host refuses paths outside the workspace root anyway.
 
 <a id="dev-note"></a>

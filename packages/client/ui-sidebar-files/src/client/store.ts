@@ -34,6 +34,17 @@ export type LevelState =
   | { readonly kind: 'ready'; readonly level: DirLevel; readonly failure?: RemoteFailure }
   | { readonly kind: 'failed'; readonly failure: RemoteFailure }
 
+/** Why a file download produced nothing to save. */
+export type DownloadFailure =
+  | { readonly kind: 'remote'; readonly failure: RemoteFailure }
+  /** The file's version moved between two read windows, so they do not form one file. */
+  | { readonly kind: 'changed' }
+
+/** One file's download, from the request until the browser receives it or the read fails. */
+export type DownloadState =
+  | { readonly kind: 'downloading' }
+  | { readonly kind: 'failed'; readonly failure: DownloadFailure }
+
 /**
  * One tab's tree: its root, the levels it has asked for, and what is open.
  *
@@ -50,6 +61,8 @@ export interface FilesTabState {
   expanded: string[]
   /** The body's scroll offset in px, so a remounted tree comes back where the reader was. */
   scrollTop: number
+  /** Downloads in progress or failed, by absolute file path; a saved file has no entry. */
+  downloads: Record<string, DownloadState>
 }
 
 /** Every tab's tree, keyed by tab id. */
@@ -79,6 +92,9 @@ type FilesActions = {
   failed: (draft: FilesState, tabId: TabId, path: string, failure: RemoteFailure) => void
   toggled: (draft: FilesState, tabId: TabId, path: string) => void
   scrolled: (draft: FilesState, tabId: TabId, scrollTop: number) => void
+  downloading: (draft: FilesState, tabId: TabId, path: string) => void
+  downloaded: (draft: FilesState, tabId: TabId, path: string) => void
+  downloadFailed: (draft: FilesState, tabId: TabId, path: string, failure: DownloadFailure) => void
   reset: (draft: FilesState, tabId: TabId) => void
   forget: (draft: FilesState, tabId: TabId) => void
 }
@@ -102,7 +118,7 @@ export function createFilesStore(): EngineStoreHandle<FilesState, FilesActions> 
        * @param root - absolute path of the workspace root.
        */
       start: (d, tabId: TabId, root: string) => {
-        d.byTab[tabId] = { root, levels: {}, expanded: [root], scrollTop: 0, autoRefresh: true }
+        d.byTab[tabId] = { root, levels: {}, expanded: [root], scrollTop: 0, autoRefresh: true, downloads: {} }
       },
       /**
        * Mark one directory as being listed.
@@ -171,6 +187,35 @@ export function createFilesStore(): EngineStoreHandle<FilesState, FilesActions> 
        */
       scrolled: (d, tabId: TabId, scrollTop: number) => {
         bucket(d, tabId).scrollTop = scrollTop
+      },
+      /**
+       * Mark one file as being read for download, replacing an earlier failure.
+       * @param d - draft state.
+       * @param tabId - the tab being drawn.
+       * @param path - absolute file path.
+       */
+      downloading: (d, tabId: TabId, path: string) => {
+        bucket(d, tabId).downloads[path] = { kind: 'downloading' }
+      },
+      /**
+       * Clear one file's download once the browser has received it.
+       * @param d - draft state.
+       * @param tabId - the tab being drawn.
+       * @param path - absolute file path.
+       */
+      downloaded: (d, tabId: TabId, path: string) => {
+        const state = bucket(d, tabId)
+        state.downloads = Object.fromEntries(Object.entries(state.downloads).filter(([key]) => key !== path))
+      },
+      /**
+       * Record why one file could not be downloaded.
+       * @param d - draft state.
+       * @param tabId - the tab being drawn.
+       * @param path - absolute file path.
+       * @param failure - why the read stopped.
+       */
+      downloadFailed: (d, tabId: TabId, path: string, failure: DownloadFailure) => {
+        bucket(d, tabId).downloads[path] = { kind: 'failed', failure }
       },
       /**
        * Drop every loaded level, keeping what is expanded.

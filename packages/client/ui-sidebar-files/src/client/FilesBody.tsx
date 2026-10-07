@@ -5,7 +5,9 @@
  * for goes through its injected face. The component itself only decides what to
  * draw for each absolute path and what a click means: a directory toggles, a
  * file opens through the owner's `tabActions` for a `file:` viewer to claim, and
- * anything else is shown but refuses to open. The header uses the shared
+ * anything else is shown but refuses to open. A file row also carries a
+ * download action, shown on hover or focus, which reports its progress and
+ * failure on that row. The header uses the shared
  * PathLabel for the root, followed by reload and workspace directory actions.
  */
 import { useEffect, useLayoutEffect, useRef } from 'react'
@@ -17,14 +19,14 @@ import type {
 } from '@deepseek-ai/dsh-client-ui-slots'
 import {
   FileTypeIcon, IconFolderCloseRegular, IconFolderOpenRegular, IconRefreshOutlineRegular, Tooltip, classifyFileType,
-  IconPauseOutlineRegular, IconPlayOutlineRegular, PathLabel,
+  IconDownloadOutlineRegular, IconLoadingOutlineRegular, IconPauseOutlineRegular, IconPlayOutlineRegular, PathLabel,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { fileAddressFor } from '@deepseek-ai/dsh-util-workspace-path'
 import type { WorkspaceDirectoryEntry } from '@deepseek-ai/dsh-api-workspace-files/types'
 import { childPath } from './face.ts'
 import type { FilesInjected } from './face.ts'
 import type {} from './locales.ts'
-import type { FilesTabState, createFilesStore } from './store.ts'
+import type { DownloadFailure, FilesTabState, createFilesStore } from './store.ts'
 import css from './FilesBody.module.css'
 
 /** The body's composed props: the tab it draws, its store, its face, and its copy. */
@@ -69,11 +71,25 @@ export function failureLine(t: TranslateNS<'sidebarFiles'>, failure: RemoteFailu
   }
 }
 
-/** What every level shares: the tab's tree and the two gestures. */
+/**
+ * Say why a file could not be downloaded, naming the file.
+ * @param t - namespace-bound translate.
+ * @param name - the file's name.
+ * @param failure - why the read stopped.
+ * @returns the line to show under the file.
+ */
+export function downloadFailureLine(t: TranslateNS<'sidebarFiles'>, name: string, failure: DownloadFailure): string {
+  if (failure.kind === 'changed') return t('download.changed', { name })
+  if (failure.failure.code === 'workspace-file/not-found') return t('download.notFound', { name })
+  return t('download.failed', { name, message: failure.failure.message })
+}
+
+/** What every level shares: the tab's tree and the three gestures. */
 interface TreeContext {
   readonly state: FilesTabState
   readonly onToggle: (parent: string, path: string) => void
   readonly onOpen: (path: string) => void
+  readonly onDownload: (path: string, name: string) => void
   readonly t: TranslateNS<'sidebarFiles'>
 }
 
@@ -93,12 +109,34 @@ function Entry({ parent, entry, tree }: { parent: string; entry: WorkspaceDirect
     )
   }
   if (entry.type === 'file') {
+    const download = tree.state.downloads[path]
+    const busy = download?.kind === 'downloading'
+    const label = tree.t(busy ? 'download.busy' : 'download.label', { name: entry.name })
     return (
       <li className={css.item} data-files-entry="file" data-files-path={path}>
-        <button type="button" className={css.row} onClick={() => { tree.onOpen(path) }}>
-          <FileTypeIcon kind={classifyFileType(entry.name)} size={16} className={css.fileIcon} />
-          <span className={css.name}>{entry.name}</span>
-        </button>
+        <div className={css.fileRow}>
+          <button type="button" className={css.row} onClick={() => { tree.onOpen(path) }}>
+            <FileTypeIcon kind={classifyFileType(entry.name)} size={16} className={css.fileIcon} />
+            <span className={css.name}>{entry.name}</span>
+          </button>
+          <button
+            type="button"
+            className={css.rowAction}
+            aria-label={label}
+            title={label}
+            aria-busy={busy}
+            disabled={busy}
+            data-files-download
+            onClick={() => { tree.onDownload(path, entry.name) }}
+          >
+            {busy ? <IconLoadingOutlineRegular className={css.spinner} /> : <IconDownloadOutlineRegular />}
+          </button>
+        </div>
+        {download?.kind === 'failed' && (
+          <p className={css.note} role="alert" data-files-download-failed>
+            {downloadFailureLine(tree.t, entry.name, download.failure)}
+          </p>
+        )}
       </li>
     )
   }
@@ -139,7 +177,7 @@ function Level({ path, tree }: { path: string; tree: TreeContext }): ReactNode {
 /** The file tree's body: the workspace root and whatever the reader has opened under it. */
 export function FilesBody({
   useTabInfo, sessionId, useSessions, useStore, actions,
-  start, refresh, setAutoRefresh, toggle, t, renderSlot,
+  start, refresh, setAutoRefresh, toggle, download, t, renderSlot,
 }: FilesBodyProps): ReactNode {
   const { tab } = useTabInfo()
   useEffect(() => tab.actions.bindCommands({ refresh: () => { refresh(tab.id) } }), [tab.actions, tab.id, refresh])
@@ -185,6 +223,7 @@ export function FilesBody({
     onToggle: (parent, path) => { toggle(tab.id, parent, path, state.expanded, signal) },
     // Every row is under the tree's root, so its address is session-relative.
     onOpen: (path) => { tabActions.openResource(fileAddressFor(sessionId, state.root, path)) },
+    onDownload: (path, name) => { download(tab.id, path, name, signal) },
     t,
   }
   const reload = (): void => {

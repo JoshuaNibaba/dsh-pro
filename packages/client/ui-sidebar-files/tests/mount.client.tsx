@@ -15,7 +15,7 @@ import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { SidebarRightTabActions } from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import { filesFace } from '../src/client/face.ts'
-import type { FilesInjected } from '../src/client/face.ts'
+import type { FilesInjected, ReadWorkspaceFile, SaveFile } from '../src/client/face.ts'
 import { FilesBody } from '../src/client/FilesBody.tsx'
 import type { FilesBodyProps } from '../src/client/FilesBody.tsx'
 import { zh } from '../src/client/locales.ts'
@@ -54,6 +54,10 @@ export interface Mounted {
   readonly face: FilesInjected
   readonly controller: AbortController
   readonly tabActions: MockedTabActions
+  /** The complete-file read a download performs; each spec scripts its outcome. */
+  readonly read: Mock<ReadWorkspaceFile>
+  /** The browser save operation. */
+  readonly save: Mock<SaveFile>
   /** Render a fresh body over the same store and face, as a tab switch remounts it. */
   readonly remount: () => RenderResult
 }
@@ -62,7 +66,9 @@ export interface Mounted {
 function harness(cwd: string | null, refreshShortcut?: ReturnType<FilesBodyProps['useTabInfo']>['tab']['refreshShortcut']) {
   const instance = createFilesStore().create()
   const script = scriptedList()
-  const face = filesFace(script.list, script.watch)(SESSION, instance.actions)
+  const read = vi.fn<ReadWorkspaceFile>()
+  const save = vi.fn<SaveFile>()
+  const face = filesFace(script.list, script.watch, read, save)(SESSION, instance.actions)
   const controller = new AbortController()
   onTestFinished(async () => {
     controller.abort()
@@ -95,7 +101,7 @@ function harness(cwd: string | null, refreshShortcut?: ReturnType<FilesBodyProps
     ...face,
     t: makeTranslate(zh),
   }
-  return { instance, script, face, controller, tabActions, shared }
+  return { instance, script, face, controller, tabActions, read, save, shared }
 }
 
 /**

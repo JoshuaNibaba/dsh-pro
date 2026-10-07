@@ -26,7 +26,23 @@ describe('createFilesStore', () => {
     const { actions } = store
     const getSnapshot = (): ReturnType<typeof store.getSnapshot> => store.getSnapshot()
     actions.start(TAB, ROOT)
-    expect(getSnapshot().byTab[TAB]).toEqual({ root: ROOT, levels: {}, expanded: [ROOT], scrollTop: 0, autoRefresh: true })
+    expect(getSnapshot().byTab[TAB]).toEqual({ root: ROOT, levels: {}, expanded: [ROOT], scrollTop: 0, autoRefresh: true, downloads: {} })
+  })
+
+  it('tracks a download from request to failure, retry, and completion, per path', () => {
+    const store = createFilesStore().create()
+    const { actions } = store
+    const downloads = (): unknown => store.getSnapshot().byTab[TAB]!.downloads
+    actions.start(TAB, ROOT)
+    actions.downloading(TAB, `${ROOT}/a`)
+    actions.downloading(TAB, `${ROOT}/b`)
+    actions.downloadFailed(TAB, `${ROOT}/a`, { kind: 'changed' })
+    expect(downloads()).toEqual({ [`${ROOT}/a`]: { kind: 'failed', failure: { kind: 'changed' } }, [`${ROOT}/b`]: { kind: 'downloading' } })
+    actions.downloading(TAB, `${ROOT}/a`)
+    actions.downloaded(TAB, `${ROOT}/b`)
+    expect(downloads()).toEqual({ [`${ROOT}/a`]: { kind: 'downloading' } })
+    actions.downloaded(TAB, `${ROOT}/a`)
+    expect(downloads()).toEqual({})
   })
 
   it('shows a failed initial listing and replaces it with a successful retry', () => {
@@ -86,7 +102,9 @@ describe('createFilesStore', () => {
     actions.scrolled(TAB, 120)
     actions.autoRefresh(TAB, false)
     actions.reset(TAB)
-    expect(getSnapshot().byTab[TAB]).toEqual({ root: ROOT, levels: {}, expanded: [ROOT, child], scrollTop: 120, autoRefresh: false })
+    expect(getSnapshot().byTab[TAB]).toEqual({
+      root: ROOT, levels: {}, expanded: [ROOT, child], scrollTop: 120, autoRefresh: false, downloads: {},
+    })
   })
 
   it('keeps the automatic setting independent for each tab', () => {
