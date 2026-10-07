@@ -39,6 +39,8 @@ async function loadComposition(): Promise<Context> {
   await writeFile(join(dist, 'app.js'), 'export {}')
   await writeFile(join(dist, 'blob.bin'), 'BLOB')
   await writeFile(join(dist, 'manifest.webmanifest'), '{}')
+  await mkdir(join(dist, 'icons'))
+  await writeFile(join(dist, 'icons', 'icon-192.png'), 'PNG')
   await mkdir(join(dist, 'empty'))
   await mkdir(join(dist, 'assets', 'langs'), { recursive: true })
   await writeFile(join(dist, 'assets', 'index-abc123.js'), 'export const hashed = 1')
@@ -153,6 +155,8 @@ describe('real Loader composition', () => {
     })
     await writeFile(join(root!, 'dist', 'app.js'), 'export const rebuilt = true')
     expect(await request(port, '/app.js')).toMatchObject({ status: 200, body: 'export const rebuilt = true' })
+
+    expect(await request(port, '/icons/icon-192.png')).toMatchObject({ status: 200, type: 'image/png', body: 'PNG' })
 
     // Unknown extension ships as octet-stream.
     expect(await request(port, '/blob.bin')).toMatchObject({ status: 200, type: 'application/octet-stream', body: 'BLOB' })
