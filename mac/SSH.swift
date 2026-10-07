@@ -11,22 +11,7 @@ enum SSH {
 
     /// Runs one remote command and returns its stdout, or throws with ssh's stderr.
     static func run(_ s: Settings, _ command: String) throws -> String {
-        let p = Process()
-        p.executableURL = URL(fileURLWithPath: "/usr/bin/ssh")
-        p.arguments = common + s.sshPortArgs + [s.sshDestination, command]
-        let out = Pipe(), err = Pipe()
-        p.standardOutput = out
-        p.standardError = err
-        try p.run()
-        let data = out.fileHandleForReading.readDataToEndOfFile()
-        let errData = err.fileHandleForReading.readDataToEndOfFile()
-        p.waitUntilExit()
-        if p.terminationStatus != 0 {
-            let msg = (String(data: errData, encoding: .utf8) ?? "").trimmed
-            throw NSError(domain: "ssh", code: Int(p.terminationStatus),
-                          userInfo: [NSLocalizedDescriptionKey: msg.isEmpty ? "ssh 退出码 \(p.terminationStatus)" : msg])
-        }
-        return String(data: data, encoding: .utf8) ?? ""
+        try SSHCommand().run(s, command)
     }
 
     /// Prints dsh web's current authenticated URL. The server writes it to
@@ -35,6 +20,24 @@ enum SSH {
         "f=~dsh/.dsh-remote/url; if [ -s \"$f\" ]; then cat \"$f\"; else "
             + "{ sudo -n journalctl -u \(service) -o cat --no-pager -n 200 2>/dev/null || journalctl -u \(service) -o cat --no-pager -n 200; }"
             + " | grep -o 'dsh web: http[^ ]*' | tail -1 | cut -d' ' -f3; fi"
+    }
+
+    /// Extracts a token URL from command output, tolerating shell startup notices on separate lines.
+    static func localLoginURL(_ output: String, port: Int) -> URL? {
+        for line in output.components(separatedBy: .newlines) {
+            guard let source = URLComponents(string: line.trimmed),
+                  source.scheme == "http" || source.scheme == "https",
+                  let token = source.queryItems?.first(where: { $0.name == "token" })?.value,
+                  !token.isEmpty else { continue }
+            var local = URLComponents()
+            local.scheme = "http"
+            local.host = "127.0.0.1"
+            local.port = port
+            local.path = "/"
+            local.queryItems = [URLQueryItem(name: "token", value: token)]
+            return local.url
+        }
+        return nil
     }
 
     static func logsCommand(_ service: String) -> String {
@@ -54,7 +57,13 @@ final class Tunnel {
     private var process: Process?
     private var closed = false
     private var errorMessage = ""
+    private var directory: URL?
+    private var errorWriter: FileHandle?
+    private var errorReader: FileHandle?
+    private var progressBuffer = ""
+    private var startedAt: TimeInterval = 0
     var onExit: ((String) -> Void)?
+    var onProgress: ((String) -> Void)?
 
     init(executableURL: URL = URL(fileURLWithPath: "/usr/bin/ssh")) {
         self.executableURL = executableURL
@@ -63,6 +72,9 @@ final class Tunnel {
     var lastError: String {
         lock.lock()
         defer { lock.unlock() }
+        if errorMessage.isEmpty, process?.isRunning == false, let root = directory {
+            return Tunnel.readError(root.appendingPathComponent("stderr"))
+        }
         return errorMessage
     }
 
@@ -80,29 +92,51 @@ final class Tunnel {
         }
         stop()
         errorMessage = ""
+        // A short private path fits macOS's Unix-domain socket limit and cannot reuse a stale master.
+        let root = URL(fileURLWithPath: "/tmp").appendingPathComponent("dsh-ssh-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: false,
+                                                attributes: [.posixPermissions: 0o700])
+        directory = root
+        let errURL = root.appendingPathComponent("stderr")
+        guard FileManager.default.createFile(atPath: errURL.path, contents: nil,
+                                              attributes: [.posixPermissions: 0o600]) else {
+            cleanup()
+            throw NSError(domain: "ssh", code: 1, userInfo: [NSLocalizedDescriptionKey: "无法创建 SSH 日志"])
+        }
         let p = Process()
         p.executableURL = executableURL
         p.arguments = SSH.common + s.sshPortArgs + [
-            "-N", "-o", "ExitOnForwardFailure=yes",
-            "-o", "ControlMaster=no", "-o", "ControlPath=none",
+            "-v", "-N", "-o", "ExitOnForwardFailure=yes",
+            "-o", "ControlMaster=yes", "-o", "ControlPersist=no", "-o", "ControlPath=\(root.path)/control",
             "-L", "127.0.0.1:\(s.localPort):127.0.0.1:\(s.remotePort)", s.sshDestination]
-        let err = Pipe()
-        p.standardError = err
+        p.standardInput = FileHandle.nullDevice
         p.standardOutput = FileHandle.nullDevice
         p.terminationHandler = { [weak self] proc in
-            let msg = (String(data: err.fileHandleForReading.availableData, encoding: .utf8) ?? "").trimmed
+            let msg = Tunnel.readError(errURL)
             DispatchQueue.main.async {
                 guard let self else { return }
                 self.lock.lock()
                 guard self.process === proc else { self.lock.unlock(); return }
                 self.process = nil
                 self.errorMessage = msg
+                self.cleanup()
                 self.lock.unlock()
                 self.onExit?(msg)
             }
         }
-        try p.run()
-        process = p
+        do {
+            let writer = try FileHandle(forWritingTo: errURL)
+            errorWriter = writer
+            errorReader = try FileHandle(forReadingFrom: errURL)
+            p.standardError = writer
+            progressBuffer = ""
+            startedAt = ProcessInfo.processInfo.systemUptime
+            try p.run()
+            process = p
+        } catch {
+            cleanup()
+            throw error
+        }
     }
 
     func shutdown() {
@@ -115,18 +149,85 @@ final class Tunnel {
     func stop() {
         lock.lock()
         defer { lock.unlock() }
-        guard let p = process else { return }
-        process = nil
-        if p.isRunning { p.terminate(); p.waitUntilExit() }
+        if let p = process {
+            process = nil
+            if p.isRunning { p.terminate(); p.waitUntilExit() }
+        }
+        cleanup()
     }
 
-    /// Polls the local forward until it accepts a TCP connection.
-    func waitReady(_ s: Settings, timeout: TimeInterval) -> Bool {
-        let deadline = Date().addingTimeInterval(timeout)
-        while Date() < deadline {
-            if !isRunning { return false }
-            if Tunnel.canConnect(port: s.localPort) { return true }
-            Thread.sleep(forTimeInterval: 0.2)
+    private func cleanup() {
+        try? errorWriter?.close()
+        try? errorReader?.close()
+        errorWriter = nil
+        errorReader = nil
+        if let root = directory { try? FileManager.default.removeItem(at: root) }
+        directory = nil
+    }
+
+    private static func readError(_ url: URL) -> String {
+        guard let reader = try? FileHandle(forReadingFrom: url) else { return "" }
+        defer { try? reader.close() }
+        let end = reader.seekToEndOfFile()
+        reader.seek(toFileOffset: end > 32768 ? end - 32768 : 0)
+        return String(decoding: reader.readDataToEndOfFile(), as: UTF8.self)
+            .components(separatedBy: "\n")
+            .filter { !$0.hasPrefix("debug") && !$0.hasPrefix("OpenSSH_") }
+            .joined(separator: "\n").trimmed
+    }
+
+    private func pollProgress() {
+        lock.lock()
+        let data = errorReader?.readDataToEndOfFile() ?? Data()
+        progressBuffer += String(decoding: data, as: UTF8.self)
+        var lines: [String] = []
+        while let newline = progressBuffer.firstIndex(of: "\n") {
+            lines.append(String(progressBuffer[..<newline]))
+            progressBuffer.removeSubrange(...newline)
+        }
+        progressBuffer = String(progressBuffer.suffix(16384))
+        let elapsed = ProcessInfo.processInfo.systemUptime - startedAt
+        let progress = onProgress
+        lock.unlock()
+        for line in lines {
+            let detail: String
+            if line.contains("Executing proxy command") {
+                detail = "using configured SSH proxy"
+            } else if ["Connecting to ", "Connection established", "Remote protocol version",
+                       "Authenticated to ", "Offering public key", "Next authentication method"]
+                .contains(where: { line.contains($0) }) {
+                detail = line
+            } else { continue }
+            progress?("ssh +\(String(format: "%.3f", elapsed))s: \(detail)")
+        }
+    }
+
+    /// Runs a command over this tunnel's authenticated transport; a dead master cannot fall back to a new TCP connection.
+    func run(_ s: Settings, _ command: String, using runner: SSHCommand, timeout: TimeInterval = 10) throws -> String {
+        lock.lock()
+        guard let root = directory, process?.isRunning == true else {
+            lock.unlock()
+            throw NSError(domain: "ssh", code: 1, userInfo: [NSLocalizedDescriptionKey: "SSH 隧道已断开"])
+        }
+        let path = root.appendingPathComponent("control").path
+        lock.unlock()
+        return try runner.run(s, command, options: ["-T", "-o", "ControlMaster=no", "-o", "ControlPath=\(path)",
+                                                     "-o", "ProxyCommand=/usr/bin/false"], timeout: timeout)
+    }
+
+    /// Waits for both the authenticated master's socket and its local forward.
+    func waitReady(_ s: Settings, timeout: TimeInterval, cancelled: () -> Bool = { false }) -> Bool {
+        let deadline = ProcessInfo.processInfo.systemUptime + timeout
+        while ProcessInfo.processInfo.systemUptime < deadline {
+            if cancelled() { return false }
+            pollProgress()
+            lock.lock()
+            let path = directory?.appendingPathComponent("control").path
+            let running = process?.isRunning ?? false
+            lock.unlock()
+            if !running { return false }
+            if let path, FileManager.default.fileExists(atPath: path), Tunnel.canConnect(port: s.localPort) { return true }
+            Thread.sleep(forTimeInterval: 0.05)
         }
         return false
     }

@@ -15,9 +15,14 @@ import AppKit
 import WebKit
 import Network
 
+private let logLock = NSLock()
+
 /// Appends one line to ~/Library/Logs/DSHRemote.log, hiding tokens.
 func log(_ msg: String) {
+    logLock.lock()
+    defer { logLock.unlock() }
     let url = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Logs/DSHRemote.log")
+    try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
     let line = "\(ISO8601DateFormatter().string(from: Date())) \(msg)\n"
         .replacingOccurrences(of: "token=[^ \n&]*", with: "token=<hidden>", options: .regularExpression)
     if let h = try? FileHandle(forWritingTo: url) { h.seekToEndOfFile(); h.write(line.data(using: .utf8)!); try? h.close() }
@@ -38,6 +43,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     var settings = Settings.load()
     var route = Route.none
     var connecting = false
+    var connectCommand: SSHCommand?
+    var sshPageStarted: TimeInterval?
     var quitting = false
     let recovery = SSHRecovery()
     let networkMonitor = NWPathMonitor()
@@ -75,6 +82,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         window.makeKeyAndOrderFront(nil)
 
         tunnel.onExit = { [weak self] msg in self?.tunnelDropped(msg) }
+        tunnel.onProgress = { log($0) }
         networkMonitor.pathUpdateHandler = { [weak self] path in
             let available = path.status == .satisfied
             DispatchQueue.main.async { self?.networkChanged(available) }
@@ -105,6 +113,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
 
     func applicationWillTerminate(_ n: Notification) {
         quitting = true
+        connectCommand?.cancel()
         recovery.stop()
         networkMonitor.cancel()
         tunnel.shutdown()
@@ -157,10 +166,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         recovery.start()
         route = .ssh
         connecting = true
-        showStatus("正在通过 SSH 连接 \(s.server) …")
+        sshPageStarted = nil
+        let command = SSHCommand()
+        connectCommand = command
+        let started = ProcessInfo.processInfo.systemUptime
+        let trace = "ssh[\(UUID().uuidString.prefix(8))]"
+        log("\(trace) connecting to \(s.sshDestination)")
+        showStatus("正在建立 SSH 隧道到 \(s.server) …")
         DispatchQueue.global().async {
             let result: Result<URL, Error> = Result {
-                let url = try self.fetchLoginURL(s)
                 if !self.tunnel.isRunning && Tunnel.canConnect(port: s.localPort) && Tunnel.reclaimOrphan(port: s.localPort) {
                     log("stopped an orphaned tunnel on port \(s.localPort)")
                 }
@@ -168,16 +182,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
                     throw NSError(domain: "dsh", code: 1, userInfo: [NSLocalizedDescriptionKey:
                         "本地端口 \(s.localPort) 已被其他程序占用。\n可执行: defaults write com.joshua.dsh-remote localPort -int <端口>"])
                 }
+                guard !command.isCancelled else { throw NSError(domain: NSURLErrorDomain, code: NSURLErrorCancelled) }
                 if !self.tunnel.isRunning { try self.tunnel.start(s) }
-                guard self.tunnel.waitReady(s, timeout: 20) else {
+                guard self.tunnel.waitReady(s, timeout: 20, cancelled: { command.isCancelled }) else {
                     let detail = self.tunnel.lastError
                     throw NSError(domain: "dsh", code: 2, userInfo: [NSLocalizedDescriptionKey:
                         "SSH 隧道未能建立" + (detail.isEmpty ? "" : "\n\(detail)")])
                 }
+                log("\(trace) authenticated tunnel ready after \(String(format: "%.3f", ProcessInfo.processInfo.systemUptime - started))s")
+                DispatchQueue.main.async {
+                    guard self.connectCommand === command, !command.isCancelled else { return }
+                    self.showStatus("正在读取服务器访问地址 …")
+                }
+                let reading = ProcessInfo.processInfo.systemUptime
+                let url = try self.fetchLoginURL(s, using: command)
+                log("\(trace) login URL read over existing SSH connection in \(String(format: "%.3f", ProcessInfo.processInfo.systemUptime - reading))s")
                 return url
             }
             DispatchQueue.main.async {
                 self.connecting = false
+                self.connectCommand = nil
                 guard !self.quitting else { self.tunnel.stop(); return }
                 if self.reconnectAfterConnect {
                     self.reconnectAfterConnect = false
@@ -195,11 +219,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
                         self.scheduleSSHRetry("SSH 隧道在连接就绪后退出")
                         return
                     }
+                    log("\(trace) ready to load page after \(String(format: "%.3f", ProcessInfo.processInfo.systemUptime - started))s")
                     log("ssh: load \(url.absoluteString)")
                     self.route = .ssh
                     self.recovery.reset()
+                    self.sshPageStarted = ProcessInfo.processInfo.systemUptime
                     self.webView.load(URLRequest(url: url))
                 case .failure(let e):
+                    log("\(trace) failed after \(String(format: "%.3f", ProcessInfo.processInfo.systemUptime - started))s: \(e.localizedDescription)")
                     self.tunnel.stop()
                     if fallbackToWeb {
                         self.useWeb(s, reason: e.localizedDescription)
@@ -222,22 +249,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     }
 
     /// Reads dsh's current URL over SSH and rewrites it to the local tunnel endpoint.
-    func fetchLoginURL(_ s: Settings) throws -> URL {
-        for _ in 0..<15 {
-            let line = try SSH.run(s, SSH.urlCommand(s.service)).trimmed
-            if let token = URLComponents(string: line)?.queryItems?.first(where: { $0.name == "token" })?.value {
-                var c = URLComponents()
-                c.scheme = "http"
-                c.host = "127.0.0.1"
-                c.port = s.localPort
-                c.path = "/"
-                c.queryItems = [URLQueryItem(name: "token", value: token)]
-                if let u = c.url { return u }
+    func fetchLoginURL(_ s: Settings, using command: SSHCommand) throws -> URL {
+        let deadline = ProcessInfo.processInfo.systemUptime + 15
+        var attempts = 0
+        while ProcessInfo.processInfo.systemUptime < deadline {
+            guard !command.isCancelled else { throw NSError(domain: NSURLErrorDomain, code: NSURLErrorCancelled) }
+            attempts += 1
+            let remaining = deadline - ProcessInfo.processInfo.systemUptime
+            let output = try tunnel.run(s, SSH.urlCommand(s.service), using: command, timeout: min(10, remaining))
+            if let url = SSH.localLoginURL(output, port: s.localPort) { return url }
+            log("ssh: service has not published a token URL (read \(attempts))")
+            let nextRead = min(deadline, ProcessInfo.processInfo.systemUptime + 1)
+            while ProcessInfo.processInfo.systemUptime < nextRead, !command.isCancelled {
+                Thread.sleep(forTimeInterval: 0.05)
             }
-            Thread.sleep(forTimeInterval: 2)
         }
         throw NSError(domain: "dsh", code: 3, userInfo: [NSLocalizedDescriptionKey:
-            "服务 \(s.service) 尚未输出访问地址,请检查服务状态(菜单:服务 → 查看日志)"])
+            "服务 \(s.service) 在 15 秒内未输出访问地址,请检查服务状态(菜单:服务 → 查看日志)"])
     }
 
     func scheduleSSHRetry(_ msg: String) {
@@ -263,6 +291,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         recovery.reset()
         if connecting {
             restartSSHAfterConnect = true
+            connectCommand?.cancel()
+            tunnel.stop()
             return
         }
         tunnel.stop()
@@ -378,6 +408,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         restartSSHAfterConnect = false
         if connecting {
             reconnectAfterConnect = true
+            connectCommand?.cancel()
+            tunnel.stop()
             return
         }
         tunnel.stop()
@@ -411,6 +443,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
                 }
             }
         }
+    }
+
+    @objc func openClientLog() {
+        let url = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Logs/DSHRemote.log")
+        NSWorkspace.shared.open(url)
     }
 
     @objc func showLogs() {
@@ -492,6 +529,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
                  decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void) {
         if let r = response.response as? HTTPURLResponse, response.isForMainFrame {
             log("response \(r.statusCode) \(r.url?.absoluteString ?? "")")
+            if route == .ssh, let started = sshPageStarted {
+                log("ssh: page response after \(String(format: "%.3f", ProcessInfo.processInfo.systemUptime - started))s")
+            }
             // Over SSH a 401 means the dsh process restarted with a new token.
             if r.statusCode == 401 && route == .ssh { decisionHandler(.cancel); connect(); return }
             if (r.value(forHTTPHeaderField: "Content-Disposition") ?? "").lowercased().hasPrefix("attachment") {
@@ -523,6 +563,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
 
     func webView(_ wv: WKWebView, didFinish nav: WKNavigation!) {
         log("finished \(wv.url?.absoluteString ?? "")")
+        if route == .ssh, wv.url?.host == "127.0.0.1", let started = sshPageStarted {
+            log("ssh: page finished after \(String(format: "%.3f", ProcessInfo.processInfo.systemUptime - started))s")
+            sshPageStarted = nil
+        }
         guard case .web(let web) = route, let url = wv.url, url.host == web.host else { return }
         guard url.path.hasSuffix("/__dsh/login") else {
             pendingPassword = "" // already logged in: the password is not needed
@@ -669,6 +713,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
             item("在浏览器中打开", #selector(openInBrowser), "o", [.command, .shift], target: self),
             item("在终端中登录服务器", #selector(openTerminal), "t", [.command, .shift], target: self),
             .separator(),
+            item("打开客户端日志", #selector(openClientLog), target: self),
             item("查看日志", #selector(showLogs), "l", [.command, .shift], target: self),
             item("重启服务…", #selector(restartService), target: self),
             .separator(),

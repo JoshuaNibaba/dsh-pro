@@ -30,12 +30,16 @@ jobs:
 
       - name: Test SSH recovery
         run: |
-          if ! xcrun swiftc -swift-version 5 mac/Settings.swift mac/SSH.swift mac/SSHRecovery.swift \
+          if ! xcrun swiftc -swift-version 5 mac/Settings.swift mac/SSH.swift mac/SSHCommand.swift mac/SSHRecovery.swift \
             mac/tests/SSHRecoveryTests.swift -o "$RUNNER_TEMP/dsh-ssh-tests" 2> "$RUNNER_TEMP/dsh-ssh-compile.log"; then
             while IFS= read -r line; do echo "::error::$line"; done < "$RUNNER_TEMP/dsh-ssh-compile.log"
             exit 1
           fi
-          "$RUNNER_TEMP/dsh-ssh-tests"
+          if ! "$RUNNER_TEMP/dsh-ssh-tests" > "$RUNNER_TEMP/dsh-ssh-test.log" 2>&1; then
+            while IFS= read -r line; do echo "::error::$line"; done < "$RUNNER_TEMP/dsh-ssh-test.log"
+            exit 1
+          fi
+          cat "$RUNNER_TEMP/dsh-ssh-test.log"
 
       - name: Build
         env:
