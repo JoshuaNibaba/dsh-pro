@@ -4,8 +4,8 @@
 //   web  the configured web address (server/install.sh --domain): the password gateway
 //        shows its login page and sets a long-lived cookie, exactly as in a browser.
 //        A password typed in Settings fills that page once; it is never stored.
-//   ssh  (key or ssh-agent only) read dsh's current launch-token URL over SSH, open an
-//        `ssh -L` tunnel and load the UI from 127.0.0.1.
+//   ssh  (key or ssh-agent only) open an `ssh -L` tunnel, read dsh's current
+//        launch-token URL over that authenticated transport, and load the UI from 127.0.0.1.
 // The web route is used whenever a web address is set, unless "prefer SSH" is on;
 // each route falls back to the other when it cannot connect. SSH, when configured,
 // also backs the Service menu (logs, restart, terminal) in either route.
@@ -479,7 +479,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         guard route == .ssh else { return alert("无法打开", "尚未连接。") }
         // The browser has no dsh cookie of its own; give it a fresh token URL.
         DispatchQueue.global().async {
-            let url = try? self.fetchLoginURL(s)
+            let url = try? self.fetchLoginURL(s, using: SSHCommand())
             DispatchQueue.main.async { if let url { NSWorkspace.shared.open(url) } }
         }
     }

@@ -45,7 +45,12 @@ jobs:
         env:
           BUILD_NUMBER: ${{ github.run_number }}
           UPDATE_REPO: ${{ github.repository }}
-        run: ./mac/build.sh --no-install
+        run: |
+          if ! ./mac/build.sh --no-install > "$RUNNER_TEMP/dsh-build.log" 2>&1; then
+            while IFS= read -r line; do echo "::error::$line"; done < "$RUNNER_TEMP/dsh-build.log"
+            exit 1
+          fi
+          cat "$RUNNER_TEMP/dsh-build.log"
 
       - name: Publish release
         env:
