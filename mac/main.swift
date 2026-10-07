@@ -151,6 +151,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         webView.loadHTMLString(html, baseURL: nil)
     }
 
+    /// Rewrites the visible status page in place; a new status page would cancel the navigation that follows.
+    func retitleStatus(_ title: String, _ detail: String) {
+        guard !sshPageLive, webView.url == nil || webView.url?.absoluteString == "about:blank",
+              let data = try? JSONSerialization.data(withJSONObject: [title, detail]),
+              let literal = String(data: data, encoding: .utf8) else { return }
+        log("status: \(title) \(detail)")
+        webView.evaluateJavaScript("""
+        (function (t) {
+          var h = document.querySelector('h3'), p = document.querySelector('pre');
+          if (h) h.textContent = t[0];
+          if (p) p.textContent = t[1];
+          return 0;
+        })(\(literal))
+        """)
+    }
+
     // MARK: connection
 
     @objc func connect() {
@@ -242,8 +258,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
                         self.nudgePageConnection()
                         return
                     }
-                    log("\(trace) ready to load page after \(String(format: "%.3f", ProcessInfo.processInfo.systemUptime - started))s")
+                    let elapsed = ProcessInfo.processInfo.systemUptime - started
+                    log("\(trace) ready to load page after \(String(format: "%.3f", elapsed))s")
                     log("ssh: load \(url.absoluteString)")
+                    self.retitleStatus("正在加载 dsh 页面 …", "SSH 隧道已建立(\(String(format: "%.1f", elapsed)) 秒)")
                     self.sshNeedsToken = false
                     self.sshLoadUsedToken = needsToken
                     self.sshPageStarted = ProcessInfo.processInfo.systemUptime

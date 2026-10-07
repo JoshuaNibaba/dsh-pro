@@ -113,7 +113,11 @@ final class Tunnel {
         p.standardInput = FileHandle.nullDevice
         p.standardOutput = FileHandle.nullDevice
         p.terminationHandler = { [weak self] proc in
-            let msg = Tunnel.readError(errURL)
+            // A signal or a silent exit leaves no ssh error line; the status says which one ended the tunnel.
+            let detail = Tunnel.readError(errURL)
+            let reason = proc.terminationReason == .uncaughtSignal
+                ? "ssh 被信号 \(proc.terminationStatus) 结束" : "ssh 退出码 \(proc.terminationStatus)"
+            let msg = detail.isEmpty ? reason : "\(detail)\n(\(reason))"
             DispatchQueue.main.async {
                 guard let self else { return }
                 self.lock.lock()
@@ -171,10 +175,17 @@ final class Tunnel {
         defer { try? reader.close() }
         let end = reader.seekToEndOfFile()
         reader.seek(toFileOffset: end > 32768 ? end - 32768 : 0)
-        return String(decoding: reader.readDataToEndOfFile(), as: UTF8.self)
-            .components(separatedBy: "\n")
-            .filter { !$0.hasPrefix("debug") && !$0.hasPrefix("OpenSSH_") }
-            .joined(separator: "\n").trimmed
+        return errorLines(String(decoding: reader.readDataToEndOfFile(), as: UTF8.self), truncated: end > 32768)
+    }
+
+    /// Keeps the ssh messages that can explain a failure: debug output, the version banner and the
+    /// authentication notice are dropped, and a tail read from mid-file drops its partial first line.
+    static func errorLines(_ text: String, truncated: Bool) -> String {
+        var lines = text.components(separatedBy: "\n").map { $0.trimmed }
+        if truncated, !lines.isEmpty { lines.removeFirst() }
+        return lines.filter {
+            !$0.isEmpty && !$0.hasPrefix("debug") && !$0.hasPrefix("OpenSSH_") && !$0.hasPrefix("Authenticated to ")
+        }.joined(separator: "\n")
     }
 
     private func pollProgress() {

@@ -19,6 +19,7 @@ struct SSHRecoveryTests {
         obsoleteRetriesCannotRun()
         keptPageOutageEnds()
         loginURLParsing()
+        exitMessages()
         try commandLifecycle()
         try tunnelLifecycle()
         try realMultiplexing()
@@ -124,7 +125,7 @@ struct SSHRecoveryTests {
                                 localPort: 18791, service: "dsh-web")
         tunnel.onExit = { message in
             exits += 1
-            precondition(message.contains("network unavailable"))
+            precondition(message.contains("network unavailable") && message.contains("ssh 退出码 255"), message)
             recovery.failed { try! tunnel.start(settings) }
         }
         try tunnel.start(settings)
@@ -181,6 +182,16 @@ struct SSHRecoveryTests {
                      "The cookie page must share the token page's origin")
         precondition(SSH.localLoginURL("Welcome\nhttp://localhost:18790/", port: 18791) == nil)
         precondition(SSH.localLoginURL("http://localhost/?token=", port: 18791) == nil)
+    }
+
+    static func exitMessages() {
+        let tail = "ccepted key.\r\ndebug1: channel 3: free\r\nAuthenticated to example ([1.2.3.4]:22) using \"publickey\".\r\n"
+            + "Timeout, server example not responding.\r\n"
+        precondition(Tunnel.errorLines(tail, truncated: true) == "Timeout, server example not responding.",
+                     "A mid-file tail must not report its partial first line or progress notices")
+        precondition(Tunnel.errorLines("OpenSSH_9.8\nPermission denied (publickey).\n", truncated: false)
+                     == "Permission denied (publickey).")
+        precondition(Tunnel.errorLines("debug1: Connecting to example\n", truncated: false).isEmpty)
     }
 
     static func commandLifecycle() throws {
