@@ -17,6 +17,7 @@ struct SSHRecoveryTests {
     static func main() throws {
         retriesSurviveRepeatedFailures()
         obsoleteRetriesCannotRun()
+        keptPageOutageEnds()
         loginURLParsing()
         try commandLifecycle()
         try tunnelLifecycle()
@@ -30,14 +31,14 @@ struct SSHRecoveryTests {
         var attempts = 0
         precondition(recovery.failed { attempts += 1 } == nil)
         recovery.start()
-        for expected in [2.0, 4, 8, 16, 30, 30, 30] {
+        for expected in [1.0, 2, 4, 8, 10, 10, 10] {
             precondition(recovery.failed { attempts += 1 } == expected)
             scheduler.actions.last!()
         }
         precondition(attempts == 7, "Retries must continue after the first failed reconnection")
         precondition(recovery.isActive)
         recovery.reset()
-        precondition(recovery.failed { attempts += 1 } == 2, "Recovery resets the backoff")
+        precondition(recovery.failed { attempts += 1 } == 1, "Recovery resets the backoff")
         recovery.stop()
     }
 
@@ -66,6 +67,15 @@ struct SSHRecoveryTests {
         precondition(attempts == 1)
         recovery.stop()
         precondition(scheduler.cancellations == 3)
+    }
+
+    static func keptPageOutageEnds() {
+        var outage = KeptPageOutage()
+        precondition(outage.failed(at: 100), "The first failure keeps the loaded page")
+        precondition(outage.failed(at: 159.9), "Failures inside one outage keep the page")
+        precondition(!outage.failed(at: 160), "A long outage shows the SSH error")
+        outage.reset()
+        precondition(outage.failed(at: 500), "A restored tunnel starts a new outage window")
     }
 
     static func tunnelLifecycle() throws {
@@ -128,7 +138,7 @@ struct SSHRecoveryTests {
             (try? String(contentsOf: root.appendingPathComponent("attempts"), encoding: .utf8).trimmed) == "3"
         }
         precondition(tunnel.isRunning, "The third SSH attempt must survive two network failures")
-        precondition(scheduler.delays == [2, 4])
+        precondition(scheduler.delays == [1, 2])
         let arguments = try String(contentsOf: root.appendingPathComponent("arguments"), encoding: .utf8)
             .components(separatedBy: "\n")
         for value in ["BatchMode=yes", "ConnectTimeout=10", "ServerAliveInterval=10", "ServerAliveCountMax=3",
@@ -165,8 +175,10 @@ struct SSHRecoveryTests {
     static func loginURLParsing() {
         let output = "Welcome to the server\nhttp://localhost:18790/?token=a%26b%3Dc\nShell notice\n"
         let url = SSH.localLoginURL(output, port: 18791)!
-        precondition(url.host == "127.0.0.1" && url.port == 18791)
+        precondition(url.host == "127.0.0.1" && url.port == 18791 && url.path == "/")
         precondition(URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first?.value == "a&b=c")
+        precondition(SSH.localPageURL(port: 18791).absoluteString == "http://127.0.0.1:18791/",
+                     "The cookie page must share the token page's origin")
         precondition(SSH.localLoginURL("Welcome\nhttp://localhost:18790/", port: 18791) == nil)
         precondition(SSH.localLoginURL("http://localhost/?token=", port: 18791) == nil)
     }

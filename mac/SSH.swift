@@ -29,15 +29,16 @@ enum SSH {
                   source.scheme == "http" || source.scheme == "https",
                   let token = source.queryItems?.first(where: { $0.name == "token" })?.value,
                   !token.isEmpty else { continue }
-            var local = URLComponents()
-            local.scheme = "http"
-            local.host = "127.0.0.1"
-            local.port = port
-            local.path = "/"
+            var local = URLComponents(url: localPageURL(port: port), resolvingAgainstBaseURL: false)!
             local.queryItems = [URLQueryItem(name: "token", value: token)]
             return local.url
         }
         return nil
+    }
+
+    /// The tunnel's page without a token; dsh accepts it while WebKit holds dsh's signed login cookie.
+    static func localPageURL(port: Int) -> URL {
+        URL(string: "http://127.0.0.1:\(port)/")!
     }
 
     static func logsCommand(_ service: String) -> String {

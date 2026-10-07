@@ -4,8 +4,10 @@
 //   web  the configured web address (server/install.sh --domain): the password gateway
 //        shows its login page and sets a long-lived cookie, exactly as in a browser.
 //        A password typed in Settings fills that page once; it is never stored.
-//   ssh  (key or ssh-agent only) open an `ssh -L` tunnel, read dsh's current
-//        launch-token URL over that authenticated transport, and load the UI from 127.0.0.1.
+//   ssh  (key or ssh-agent only) open an `ssh -L` tunnel and load the UI from 127.0.0.1
+//        with dsh's login cookie; only a 401 reads dsh's current launch-token URL over
+//        that authenticated transport. A tunnel that drops under a loaded page is rebuilt
+//        behind it, and dsh's own client reconnects without reloading the page.
 // The web route is used whenever a web address is set, unless "prefer SSH" is on;
 // each route falls back to the other when it cannot connect. SSH, when configured,
 // also backs the Service menu (logs, restart, terminal) in either route.
@@ -45,6 +47,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     var connecting = false
     var connectCommand: SSHCommand?
     var sshPageStarted: TimeInterval?
+    /// The dsh page from the tunnel is on screen; tunnel recovery keeps it instead of reloading.
+    var sshPageLive = false
+    var keptPageOutage = KeptPageOutage()
+    /// The tunnel page answered 401: the next connection reads a launch token over SSH.
+    var sshNeedsToken = false
+    /// The current SSH page load carries a launch token, so another 401 is not retried.
+    var sshLoadUsedToken = false
     var quitting = false
     let recovery = SSHRecovery()
     let networkMonitor = NWPathMonitor()
@@ -123,6 +132,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
 
     func showStatus(_ title: String, _ detail: String = "", retry: Bool = false, settingsLink: Bool = false) {
         log("status: \(title) \(detail)")
+        sshPageLive = false
+        keptPageOutage.reset()
         func esc(_ s: String) -> String {
             s.replacingOccurrences(of: "&", with: "&amp;").replacingOccurrences(of: "<", with: "&lt;")
         }
@@ -167,12 +178,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         route = .ssh
         connecting = true
         sshPageStarted = nil
+        let needsToken = sshNeedsToken
+        sshNeedsToken = false
         let command = SSHCommand()
         connectCommand = command
         let started = ProcessInfo.processInfo.systemUptime
         let trace = "ssh[\(UUID().uuidString.prefix(8))]"
-        log("\(trace) connecting to \(s.sshDestination)")
-        showStatus("正在建立 SSH 隧道到 \(s.server) …")
+        log("\(trace) connecting to \(s.sshDestination)\(sshPageLive ? " behind the current page" : "")")
+        if !sshPageLive { showStatus("正在建立 SSH 隧道到 \(s.server) …") }
         DispatchQueue.global().async {
             let result: Result<URL, Error> = Result {
                 if !self.tunnel.isRunning && Tunnel.canConnect(port: s.localPort) && Tunnel.reclaimOrphan(port: s.localPort) {
@@ -190,8 +203,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
                         "SSH 隧道未能建立" + (detail.isEmpty ? "" : "\n\(detail)")])
                 }
                 log("\(trace) authenticated tunnel ready after \(String(format: "%.3f", ProcessInfo.processInfo.systemUptime - started))s")
+                guard needsToken else { return SSH.localPageURL(port: s.localPort) }
                 DispatchQueue.main.async {
-                    guard self.connectCommand === command, !command.isCancelled else { return }
+                    guard self.connectCommand === command, !command.isCancelled, !self.sshPageLive else { return }
                     self.showStatus("正在读取服务器访问地址 …")
                 }
                 let reading = ProcessInfo.processInfo.systemUptime
@@ -202,6 +216,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
             DispatchQueue.main.async {
                 self.connecting = false
                 self.connectCommand = nil
+                if needsToken { self.sshNeedsToken = true } // kept until a token page load starts
                 guard !self.quitting else { self.tunnel.stop(); return }
                 if self.reconnectAfterConnect {
                     self.reconnectAfterConnect = false
@@ -219,10 +234,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
                         self.scheduleSSHRetry("SSH 隧道在连接就绪后退出")
                         return
                     }
-                    log("\(trace) ready to load page after \(String(format: "%.3f", ProcessInfo.processInfo.systemUptime - started))s")
-                    log("ssh: load \(url.absoluteString)")
                     self.route = .ssh
                     self.recovery.reset()
+                    self.keptPageOutage.reset()
+                    if self.sshPageLive && !needsToken {
+                        log("\(trace) tunnel restored behind the current page after \(String(format: "%.3f", ProcessInfo.processInfo.systemUptime - started))s")
+                        self.nudgePageConnection()
+                        return
+                    }
+                    log("\(trace) ready to load page after \(String(format: "%.3f", ProcessInfo.processInfo.systemUptime - started))s")
+                    log("ssh: load \(url.absoluteString)")
+                    self.sshNeedsToken = false
+                    self.sshLoadUsedToken = needsToken
                     self.sshPageStarted = ProcessInfo.processInfo.systemUptime
                     self.webView.load(URLRequest(url: url))
                 case .failure(let e):
@@ -244,6 +267,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         tunnel.stop()
         guard let web = s.web else { return }
         if let reason { log("ssh unavailable, using web address: \(reason)") }
+        sshPageLive = false
+        keptPageOutage.reset()
         route = .web(web)
         webView.load(URLRequest(url: web))
     }
@@ -274,8 +299,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
             guard let self, !self.quitting else { return }
             self.connectSSH(Settings.load(), fallbackToWeb: false)
         }
-        if let delay {
-            showStatus("连接已断开,\(Int(delay)) 秒后自动重连 …", msg, retry: true, settingsLink: true)
+        guard let delay else { return }
+        if sshPageLive && keptPageOutage.failed(at: ProcessInfo.processInfo.systemUptime) {
+            log("ssh: keeping the page; reconnecting in \(Int(delay))s: \(msg)")
+            return
+        }
+        showStatus("连接已断开,\(Int(delay)) 秒后自动重连 …", msg, retry: true, settingsLink: true)
+    }
+
+    /// Makes the kept page's dsh client retry now instead of after its own backoff, which reaches 10 seconds.
+    func nudgePageConnection() {
+        webView.evaluateJavaScript("window.dispatchEvent(new Event('offline'));window.dispatchEvent(new Event('online'));0") { _, error in
+            if let error { log("ssh: page reconnect signal failed: \(error.localizedDescription)") }
         }
     }
 
@@ -406,6 +441,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         guard !quitting else { return }
         recovery.stop()
         restartSSHAfterConnect = false
+        sshPageLive = false // settings may name another server
         if connecting {
             reconnectAfterConnect = true
             connectCommand?.cancel()
@@ -532,8 +568,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
             if route == .ssh, let started = sshPageStarted {
                 log("ssh: page response after \(String(format: "%.3f", ProcessInfo.processInfo.systemUptime - started))s")
             }
-            // Over SSH a 401 means the dsh process restarted with a new token.
-            if r.statusCode == 401 && route == .ssh { decisionHandler(.cancel); connect(); return }
+            // Over SSH a 401 means WebKit has no valid dsh login cookie; only a launch token can create one.
+            if r.statusCode == 401 && route == .ssh {
+                decisionHandler(.cancel)
+                sshPageStarted = nil
+                if sshLoadUsedToken {
+                    sshLoadUsedToken = false
+                    showStatus("服务拒绝了访问地址", "dsh 可能刚刚重启,请重新连接。", retry: true)
+                } else {
+                    log("ssh: page needs a launch token")
+                    sshPageLive = false
+                    sshNeedsToken = true
+                    connectSSH(settings, fallbackToWeb: false)
+                }
+                return
+            }
             if (r.value(forHTTPHeaderField: "Content-Disposition") ?? "").lowercased().hasPrefix("attachment") {
                 return decisionHandler(.download)
             }
@@ -563,9 +612,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
 
     func webView(_ wv: WKWebView, didFinish nav: WKNavigation!) {
         log("finished \(wv.url?.absoluteString ?? "")")
-        if route == .ssh, wv.url?.host == "127.0.0.1", let started = sshPageStarted {
-            log("ssh: page finished after \(String(format: "%.3f", ProcessInfo.processInfo.systemUptime - started))s")
-            sshPageStarted = nil
+        if route == .ssh, wv.url?.host == "127.0.0.1" {
+            sshPageLive = true
+            sshLoadUsedToken = false
+            if let started = sshPageStarted {
+                log("ssh: page finished after \(String(format: "%.3f", ProcessInfo.processInfo.systemUptime - started))s")
+                sshPageStarted = nil
+            }
         }
         guard case .web(let web) = route, let url = wv.url, url.host == web.host else { return }
         guard url.path.hasSuffix("/__dsh/login") else {
