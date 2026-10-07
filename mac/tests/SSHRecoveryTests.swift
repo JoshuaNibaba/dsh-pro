@@ -97,6 +97,7 @@ struct SSHRecoveryTests {
             echo 'network unavailable' >&2
             exit 255
         fi
+        printf 'debug1: Connecting to example\\r\\nAuthenticated to example using publickey\\r\\n' >&2
         touch "$control"
         exec /bin/sleep 60
         """

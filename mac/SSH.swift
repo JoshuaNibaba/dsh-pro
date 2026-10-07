@@ -181,7 +181,7 @@ final class Tunnel {
         let data = errorReader?.readDataToEndOfFile() ?? Data()
         progressBuffer += String(decoding: data, as: UTF8.self)
         var lines: [String] = []
-        while let newline = progressBuffer.firstIndex(of: "\n") {
+        while let newline = progressBuffer.firstIndex(where: { $0.isNewline }) {
             lines.append(String(progressBuffer[..<newline]))
             progressBuffer.removeSubrange(...newline)
         }
