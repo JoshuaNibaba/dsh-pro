@@ -13,6 +13,7 @@
 
 import AppKit
 import WebKit
+import Network
 
 /// Appends one line to ~/Library/Logs/DSHRemote.log, hiding tokens.
 func log(_ msg: String) {
@@ -38,7 +39,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     var route = Route.none
     var connecting = false
     var quitting = false
-    var retryDelay: TimeInterval = 2
+    let recovery = SSHRecovery()
+    let networkMonitor = NWPathMonitor()
+    var networkAvailable: Bool?
+    var restartSSHAfterConnect = false
+    var reconnectAfterConnect = false
     var settingsWindow: SettingsWindowController?
     var updateTimer: Timer?
     var updating = false
@@ -70,6 +75,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         window.makeKeyAndOrderFront(nil)
 
         tunnel.onExit = { [weak self] msg in self?.tunnelDropped(msg) }
+        networkMonitor.pathUpdateHandler = { [weak self] path in
+            let available = path.status == .satisfied
+            DispatchQueue.main.async { self?.networkChanged(available) }
+        }
+        networkMonitor.start(queue: DispatchQueue(label: "com.joshua.dsh-remote.network"))
         NSWorkspace.shared.notificationCenter.addObserver(
             self, selector: #selector(didWake), name: NSWorkspace.didWakeNotification, object: nil)
         connect()
@@ -95,7 +105,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
 
     func applicationWillTerminate(_ n: Notification) {
         quitting = true
-        tunnel.stop()
+        recovery.stop()
+        networkMonitor.cancel()
+        tunnel.close()
     }
 
     // MARK: status page
@@ -127,6 +139,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         let s = settings
         window.title = s.displayName.isEmpty ? "DSH Remote" : "DSH Remote — \(s.displayName)"
         guard s.isConfigured else {
+            recovery.stop()
             route = .none
             showStatus("尚未配置服务器", "请在「设置」中填写服务器地址或网页地址。", settingsLink: true)
             openSettings()
@@ -138,6 +151,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     }
 
     func connectSSH(_ s: Settings, fallbackToWeb: Bool) {
+        guard !connecting, !quitting else { return }
+        recovery.cancelPending()
+        settings = s
+        recovery.start()
+        route = .ssh
         connecting = true
         showStatus("正在通过 SSH 连接 \(s.server) …")
         DispatchQueue.global().async {
@@ -160,19 +178,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
             }
             DispatchQueue.main.async {
                 self.connecting = false
+                guard !self.quitting else { self.tunnel.stop(); return }
+                if self.reconnectAfterConnect {
+                    self.reconnectAfterConnect = false
+                    self.reconnect()
+                    return
+                }
+                if self.restartSSHAfterConnect {
+                    self.restartSSHAfterConnect = false
+                    self.restoreSSH()
+                    return
+                }
                 switch result {
                 case .success(let url):
+                    guard self.tunnel.isRunning else {
+                        self.scheduleSSHRetry("SSH 隧道在连接就绪后退出")
+                        return
+                    }
                     log("ssh: load \(url.absoluteString)")
                     self.route = .ssh
-                    self.retryDelay = 2
+                    self.recovery.reset()
                     self.webView.load(URLRequest(url: url))
                 case .failure(let e):
                     self.tunnel.stop()
                     if fallbackToWeb {
                         self.useWeb(s, reason: e.localizedDescription)
                     } else {
-                        self.route = .none
-                        self.showStatus("连接失败", e.localizedDescription, retry: true, settingsLink: true)
+                        self.scheduleSSHRetry(e.localizedDescription)
                     }
                 }
             }
@@ -180,6 +212,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     }
 
     func useWeb(_ s: Settings, reason: String?) {
+        recovery.stop()
+        restartSSHAfterConnect = false
+        tunnel.stop()
         guard let web = s.web else { return }
         if let reason { log("ssh unavailable, using web address: \(reason)") }
         route = .web(web)
@@ -205,24 +240,47 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
             "服务 \(s.service) 尚未输出访问地址,请检查服务状态(菜单:服务 → 查看日志)"])
     }
 
+    func scheduleSSHRetry(_ msg: String) {
+        guard !quitting, recovery.isActive else { return }
+        let delay = recovery.failed { [weak self] in
+            guard let self, !self.quitting else { return }
+            self.connectSSH(Settings.load(), fallbackToWeb: false)
+        }
+        if let delay {
+            showStatus("连接已断开,\(Int(delay)) 秒后自动重连 …", msg, retry: true, settingsLink: true)
+        }
+    }
+
     func tunnelDropped(_ msg: String) {
         log("tunnel exited: \(msg)")
-        guard !quitting, route == .ssh else { return }
-        let delay = retryDelay
-        retryDelay = min(retryDelay * 2, 30)
-        showStatus("连接已断开,\(Int(delay)) 秒后重连 …", msg, retry: true)
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
-            guard let self, !self.tunnel.isRunning, self.route == .ssh else { return }
-            self.connect()
+        guard !connecting else { return }
+        scheduleSSHRetry(msg)
+    }
+
+    /// Replaces even a living SSH process: its old TCP session may no longer work.
+    func restoreSSH() {
+        guard !quitting, recovery.isActive else { return }
+        recovery.reset()
+        if connecting {
+            restartSSHAfterConnect = true
+            return
+        }
+        tunnel.stop()
+        connectSSH(Settings.load(), fallbackToWeb: false)
+    }
+
+    func networkChanged(_ available: Bool) {
+        let wasAvailable = networkAvailable
+        networkAvailable = available
+        if wasAvailable == false && available {
+            log("network restored; replacing SSH tunnel")
+            restoreSSH()
         }
     }
 
     @objc func didWake() {
-        // Sleep usually kills the SSH session; reconnect promptly instead of waiting for ServerAlive.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
-            guard let self, self.route == .ssh, !self.tunnel.isRunning else { return }
-            self.connect()
-        }
+        log("system woke; replacing SSH tunnel")
+        restoreSSH()
     }
 
     // MARK: settings
@@ -315,6 +373,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     }
 
     @objc func reconnect() {
+        guard !quitting else { return }
+        recovery.stop()
+        restartSSHAfterConnect = false
+        if connecting {
+            reconnectAfterConnect = true
+            return
+        }
         tunnel.stop()
         route = .none
         connect()
@@ -442,7 +507,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     func webView(_ wv: WKWebView, didFailProvisionalNavigation nav: WKNavigation!, withError error: Error) {
         log("provisional failure \(error)")
         if (error as NSError).code == NSURLErrorCancelled { return }
-        if route == .ssh && !tunnel.isRunning { return } // tunnelDropped owns this case
+        if route == .ssh {
+            guard !connecting, tunnel.isRunning else { return }
+            tunnel.stop()
+            scheduleSSHRetry(error.localizedDescription)
+            return
+        }
         if case .web = route, !settings.server.isEmpty, !webFellBack, !connecting {
             webFellBack = true
             log("web address unreachable, trying SSH")

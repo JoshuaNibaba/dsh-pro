@@ -28,6 +28,12 @@ jobs:
             mac/Chrome.swift mac/tests/ChromeTests.swift -o "$RUNNER_TEMP/dsh-chrome-tests"
           "$RUNNER_TEMP/dsh-chrome-tests"
 
+      - name: Test SSH recovery
+        run: |
+          xcrun swiftc -swift-version 5 mac/Settings.swift mac/SSH.swift mac/SSHRecovery.swift \
+            mac/tests/SSHRecoveryTests.swift -o "$RUNNER_TEMP/dsh-ssh-tests"
+          "$RUNNER_TEMP/dsh-ssh-tests"
+
       - name: Build
         env:
           BUILD_NUMBER: ${{ github.run_number }}

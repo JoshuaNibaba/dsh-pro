@@ -6,6 +6,7 @@ import Foundation
 
 enum SSH {
     static let common = ["-o", "BatchMode=yes", "-o", "ConnectTimeout=10",
+                         "-o", "ServerAliveInterval=10", "-o", "ServerAliveCountMax=3",
                          "-o", "StrictHostKeyChecking=accept-new"]
 
     /// Runs one remote command and returns its stdout, or throws with ssh's stderr.
@@ -48,20 +49,42 @@ enum SSH {
 }
 
 final class Tunnel {
+    private let lock = NSRecursiveLock()
+    private let executableURL: URL
     private var process: Process?
-    private(set) var lastError = ""
+    private var closed = false
+    private var errorMessage = ""
     var onExit: ((String) -> Void)?
 
-    var isRunning: Bool { process?.isRunning ?? false }
+    init(executableURL: URL = URL(fileURLWithPath: "/usr/bin/ssh")) {
+        self.executableURL = executableURL
+    }
+
+    var lastError: String {
+        lock.lock()
+        defer { lock.unlock() }
+        return errorMessage
+    }
+
+    var isRunning: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return process?.isRunning ?? false
+    }
 
     func start(_ s: Settings) throws {
+        lock.lock()
+        defer { lock.unlock() }
+        guard !closed else {
+            throw NSError(domain: "ssh", code: 1, userInfo: [NSLocalizedDescriptionKey: "客户端已退出"])
+        }
         stop()
-        lastError = ""
+        errorMessage = ""
         let p = Process()
-        p.executableURL = URL(fileURLWithPath: "/usr/bin/ssh")
+        p.executableURL = executableURL
         p.arguments = SSH.common + s.sshPortArgs + [
             "-N", "-o", "ExitOnForwardFailure=yes",
-            "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=3",
+            "-o", "ControlMaster=no", "-o", "ControlPath=none",
             "-L", "127.0.0.1:\(s.localPort):127.0.0.1:\(s.remotePort)", s.sshDestination]
         let err = Pipe()
         p.standardError = err
@@ -69,9 +92,12 @@ final class Tunnel {
         p.terminationHandler = { [weak self] proc in
             let msg = (String(data: err.fileHandleForReading.availableData, encoding: .utf8) ?? "").trimmed
             DispatchQueue.main.async {
-                guard let self, self.process === proc else { return }
+                guard let self else { return }
+                self.lock.lock()
+                guard self.process === proc else { self.lock.unlock(); return }
                 self.process = nil
-                self.lastError = msg
+                self.errorMessage = msg
+                self.lock.unlock()
                 self.onExit?(msg)
             }
         }
@@ -79,7 +105,16 @@ final class Tunnel {
         process = p
     }
 
+    func close() {
+        lock.lock()
+        defer { lock.unlock() }
+        closed = true
+        stop()
+    }
+
     func stop() {
+        lock.lock()
+        defer { lock.unlock() }
         guard let p = process else { return }
         process = nil
         if p.isRunning { p.terminate(); p.waitUntilExit() }

@@ -17,7 +17,7 @@ rm -rf build && mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 
 for arch in arm64 x86_64; do
   xcrun swiftc -O -swift-version 5 -target "$arch-apple-macos13" \
-    -framework AppKit -framework WebKit ./*.swift -o "build/DSHRemote-$arch"
+    -framework AppKit -framework WebKit -framework Network ./*.swift -o "build/DSHRemote-$arch"
 done
 lipo -create build/DSHRemote-arm64 build/DSHRemote-x86_64 -output "$APP/Contents/MacOS/DSHRemote"
 rm build/DSHRemote-arm64 build/DSHRemote-x86_64
