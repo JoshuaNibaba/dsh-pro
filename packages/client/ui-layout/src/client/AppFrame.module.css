@@ -56,13 +56,66 @@
 }
 
 .sidebarCol {
+  grid-column: 1;
   min-width: 0;
   overflow: hidden;
   background: var(--dsw-specific-sidebar-fill);
   border-right: 0.5px solid var(--dsw-alias-border-l3);
 }
 
+/* Phone drawer (AppFrame overlay): the open sidebar leaves its zero-width track
+   and floats over the centre at the inline width the TSX sets, above column
+   content and the drag handles, below frame overlays. Explicit grid columns
+   keep the centre in its own track while the sidebar is out of flow. */
+.frame[data-sidebar-overlay]:not([data-sidebar-collapsed]) .sidebarCol {
+  position: absolute;
+  inset-block: 0;
+  left: 0;
+  z-index: 13;
+  box-shadow: 0 0 24px rgb(0 0 0 / 0.18);
+  animation: drawerIn var(--ds-transition-duration) var(--ds-ease-in-out);
+}
+
+.frame[data-sidebar-overlay] .sidebarCol {
+  border-right: none;
+}
+
+.drawerBackdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 12;
+  background: rgb(0 0 0 / 0.32);
+  animation: backdropIn var(--ds-transition-duration) var(--ds-ease-in-out);
+}
+
+@keyframes drawerIn {
+  from { transform: translateX(-100%); }
+}
+
+@keyframes backdropIn {
+  from { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .frame[data-sidebar-overlay] .sidebarCol,
+  .drawerBackdrop {
+    animation: none;
+  }
+}
+
+/* Published while the phone frame mounts the shell.leading seat (no rail):
+   12px inset, the two 28px controls with their 8px gap, then 8px of air. A
+   narrow macOS window keeps the darwin placement beside the traffic lights. */
+:global(html:not([data-platform='darwin'])) .frame[data-sidebar-overlay][data-sidebar-collapsed] {
+  --dsh-frame-leading-clearance: 84px;
+}
+
+:global(html:not([data-platform='darwin'])) .frame[data-sidebar-overlay] .leadingSeat {
+  left: 12px;
+}
+
 .centerCol {
+  grid-column: 2;
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -265,6 +318,7 @@
  * where it is. The occupant draws its own left border.
  */
 .rightbarCol {
+  grid-column: 3;
   position: relative;
   min-width: 0;
   overflow: visible;

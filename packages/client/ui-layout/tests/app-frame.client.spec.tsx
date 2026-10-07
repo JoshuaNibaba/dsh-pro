@@ -254,6 +254,63 @@ describe('AppFrame', () => {
     expect(frame.querySelector('[data-shell-leading-band]')).toBeNull()
   })
 
+  describe('phone drawer', () => {
+    it('gives the closed sidebar no track and houses its controls in the shell.leading seat', () => {
+      frameWidth = 390
+      const { frame, sidebarOwner, queryByTestId } = mountFrame()
+      expect(tracks(frame)).toEqual([0, 0])
+      expect(sidebarOwner()).toEqual({ collapsed: true, width: 0 })
+      expect(frame.hasAttribute('data-sidebar-overlay')).toBe(true)
+      expect(queryByTestId('shell.leading-content')).toBeTruthy()
+      expect(frame.querySelector('[data-sidebar-backdrop]')).toBeNull()
+    })
+
+    it('opens over the centre without taking its track, and the backdrop dismisses it', () => {
+      frameWidth = 390
+      const { frame, instance, sidebarOwner, queryByTestId } = mountFrame()
+      act(() => { instance.actions.toggleSidebar() })
+      // The centre keeps the whole width; the drawer leaves a strip uncovered.
+      expect(tracks(frame)).toEqual([0, 0])
+      expect(sidebarOwner()).toEqual({ collapsed: false, width: 280 })
+      expect(frame.querySelector('[data-side="sidebar"]')).toBeNull()
+      expect(queryByTestId('shell.leading-content')).toBeNull()
+      const backdrop = frame.querySelector<HTMLElement>('[data-sidebar-backdrop]')
+      expect(backdrop?.getAttribute('aria-hidden')).toBe('true')
+      act(() => { backdrop!.click() })
+      expect(sidebarOwner()).toEqual({ collapsed: true, width: 0 })
+      expect(frame.querySelector('[data-sidebar-backdrop]')).toBeNull()
+    })
+
+    it('fits the drawer to a very narrow screen', () => {
+      frameWidth = 300
+      const { instance, sidebarOwner } = mountFrame()
+      act(() => { instance.actions.toggleSidebar() })
+      expect(sidebarOwner()).toEqual({ collapsed: false, width: 244 })
+    })
+
+    it('closes after the main view moves to another Session or panel, not on opening', () => {
+      frameWidth = 390
+      const { instance, sidebarOwner, rerenderFrame } = mountFrame()
+      act(() => { instance.actions.toggleSidebar() })
+      rerenderFrame()
+      expect(sidebarOwner().collapsed).toBe(false)
+      selectedSession = 's-other' as SessionId
+      rerenderFrame()
+      expect(sidebarOwner().collapsed).toBe(true)
+      act(() => { instance.actions.toggleSidebar() })
+      act(() => { instance.actions.selectPanel('plugins' as MainPanelId) })
+      expect(sidebarOwner().collapsed).toBe(true)
+    })
+
+    it('returns to a rail column once the frame is wider than a phone', () => {
+      frameWidth = 390
+      const { frame } = mountFrame()
+      resize(900)
+      expect(frame.hasAttribute('data-sidebar-overlay')).toBe(false)
+      expect(tracks(frame)).toEqual([56, 0])
+    })
+  })
+
   it('mounts the shell.leading seat only while the darwin collapse hides the column', () => {
     document.documentElement.dataset.platform = 'darwin'
     const { frame, instance, sidebarOwner, queryByTestId } = mountFrame()
@@ -317,8 +374,11 @@ describe('AppFrame normal width concessions', () => {
     expect(frame.querySelector('[data-side="rightbar"]')).toBeNull()
     expect(instance.getSnapshot().layoutInfo).toMatchObject({ rightbarShown: true, rightbar: 864 })
     act(() => { instance.actions.closeRightbar() })
-    resize(455)
+    resize(800)
     expect(tracks(frame)).toEqual([56, 0])
+    // A phone-width frame drops even the rail.
+    resize(455)
+    expect(tracks(frame)).toEqual([0, 0])
     resize(1920)
     expect(tracks(frame)).toEqual([420, 0])
   })
@@ -335,7 +395,8 @@ describe('AppFrame normal width concessions', () => {
     expect(rightOwner().canShow).toBe(true)
   })
 
-  it.each([[756, 300, true], [755, 0, false]] as const)('reports eligibility at %ipx', (width, rightbar, canShow) => {
+  // Beside the rail from 768px; below it the closed sidebar has no track, so 700px still fits.
+  it.each([[768, 312, true], [700, 300, true], [699, 0, false]] as const)('reports eligibility at %ipx', (width, rightbar, canShow) => {
     frameWidth = width
     const { instance, rightOwner } = mountFrame()
     act(() => { instance.actions.toggleSidebar() })
@@ -505,11 +566,11 @@ describe('AppFrame right panel presentation', () => {
   })
 
   it('retains fullscreen without a track when normal columns cannot fit', () => {
-    frameWidth = 700
+    frameWidth = 650
     const { frame, instance, rightOwner } = mountFrame()
     act(() => { instance.actions.openRightbar(false, true) })
-    expect(tracks(frame)).toEqual([56, 0])
-    expect(rightOwner()).toEqual({ width: 0, viewportWidth: 700, canShow: false })
+    expect(tracks(frame)).toEqual([0, 0])
+    expect(rightOwner()).toEqual({ width: 0, viewportWidth: 650, canShow: false })
     expect(instance.getSnapshot().layoutInfo.rightbarShown).toBe(true)
     expect(frame.querySelector('[data-side="rightbar"]')).toBeNull()
   })

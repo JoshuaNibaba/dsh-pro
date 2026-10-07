@@ -8,6 +8,24 @@ body,
   margin: 0;
 }
 
+/* Mobile browsers: the dynamic viewport tracks a collapsing toolbar, so the
+   composer at the bottom stays on screen. */
+@supports (height: 100dvh) {
+  html,
+  body,
+  #root {
+    height: 100dvh;
+  }
+}
+
+/* The page opts into the full screen (viewport-fit=cover in index.html); the
+   app keeps clear of the notch, rounded corners and home indicator. Every inset
+   is 0 on desktops. */
+#root {
+  box-sizing: border-box;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+
 body {
   font-family: var(
     --dsw-font-family,

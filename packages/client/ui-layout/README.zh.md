@@ -29,6 +29,8 @@ kind: "package-reference"
 
 本插件在 root slot 中组合侧边栏、主内容和右栏。侧边栏宽度为 264～420px，默认为 280px，收起后保留 56px 控制栏；窗口宽度低于 1024px 时自动收起，打开右侧面板也会收起手动展开的侧边栏。右侧面板首次打开时使用视口宽度的 45%，之后保留用户的像素宽度偏好，上限为 70%。为给中栏保留 400px，框架先将右侧面板缩减至 300px，再报告空间不足，使占用方将其关闭，最后才进一步压缩中栏。拖动没有过渡延迟；右侧手柄在关闭或全屏时不显示。
 
+宽度低于 768px（手机）时框架设置 `data-sidebar-overlay`：收起的侧边栏不占列，中栏占满整个宽度，框架在左上角以 12px 内缩挂载[窗口 chrome 座](#window-chrome-seat)。打开侧边栏时它以抽屉形式滑入、覆盖在中栏之上——宽度不超过其宽度偏好，并始终比框架窄 56px——下方是一层变暗的遮罩；抽屉没有拖动手柄。点按遮罩，或主视图切换到另一个会话或全局面板时，通过 `closeNarrowSidebar` 关闭抽屉，它只清除窄屏覆盖状态。
+
 全局面板占据 root 作用域的 `main` keyed slot；`conversation` 是为会话界面保留的 key。`ctx.layout.selectPanel(id)` 选中已注册面板，`null` 则选中会话界面，但不改变当前会话。Plugins 页面是默认组合中的一个全局面板。
 
 root 作用域的单一 `shell.bottom` slot 横跨三列下方的整行。占用方控制自身高度与显隐；三列按该高度缩短，空内容不预留空间。切换主面板时保留底部组件。列宽拖拽手柄止于底部内容上方，`shell.overlay` 仍覆盖整个框架。默认组合不占用此 slot。
@@ -36,7 +38,7 @@ root 作用域的单一 `shell.bottom` slot 横跨三列下方的整行。占用
 <a id="window-chrome-seat"></a>
 ### 窗口 chrome 座
 
-在 macOS 桌面（`html[data-platform='darwin']`，仅由桌面 preload 设置）下，收起的侧边栏整列隐藏而非保留控制栏，框架在左上角挂载 root 作用域的单一 `shell.leading` 座——位于 hiddenInset 红绿灯旁，覆盖所有主面板；ui-sidebar 以重新打开与 New Session 控件占据该座。座挂载期间框架发布 `--dsh-frame-leading-clearance`：窗口 chrome 占据的行内带宽，自框架左边缘起量；内容抵达左上角的主面板以它做内边距，避免落在红绿灯或控件之下。框架还始终在根元素上发布 `--dsh-frame-top-clearance`（48px）：窗口顶带之下的固定下沉量；主面板中的入口型页面（插件管理器等类似页面，非对话）以它做顶部内边距。框架自己不声明任何 darwin drag：每个 chrome 行给自身打上 `data-window-drag`，ui-web base.css 把该标记变成唯一那条 darwin drag 规则，于是行自己的盒子就是窗口的可拖几何——行的空白段可拖，控件保持可点。框架仅剩的那条 drag 规则属于 Windows 标题栏行。
+在 macOS 桌面（`html[data-platform='darwin']`，仅由桌面 preload 设置）以及手机宽度的框架下，收起的侧边栏整列隐藏而非保留控制栏，框架在左上角挂载 root 作用域的单一 `shell.leading` 座——位于 hiddenInset 红绿灯旁，覆盖所有主面板；ui-sidebar 以重新打开与 New Session 控件占据该座。座挂载期间框架发布 `--dsh-frame-leading-clearance`：窗口 chrome 占据的行内带宽，自框架左边缘起量；内容抵达左上角的主面板以它做内边距，避免落在红绿灯或控件之下。框架还始终在根元素上发布 `--dsh-frame-top-clearance`（48px）：窗口顶带之下的固定下沉量；主面板中的入口型页面（插件管理器等类似页面，非对话）以它做顶部内边距。框架自己不声明任何 darwin drag：每个 chrome 行给自身打上 `data-window-drag`，ui-web base.css 把该标记变成唯一那条 darwin drag 规则，于是行自己的盒子就是窗口的可拖几何——行的空白段可拖，控件保持可点。框架仅剩的那条 drag 规则属于 Windows 标题栏行。
 
 Windows Electron 的 `data-windows-titlebar` 标记在所有列上方预留顶栏高度，并移除收起后的侧栏轨道。内容区仅左上角保留 16px 圆角，其余角和内部交界处保持直角。框架发布 `--dsh-windows-content-radius` 和 `--dsh-windows-sidebar-width`，供 ui-sidebar-right 的全屏圆角及侧栏避让使用。普通 Web 文档不会获得该标记；macOS 保留其独立布局。
 
@@ -92,7 +94,8 @@ Windows Electron 的 `data-windows-titlebar` 标记在所有列上方预留顶�
 这些限制界定了当前布局行为。它们是当前包约束，不是通用窗口管理器对比或任务积压。
 
 - **面板几何是瞬时状态**——重新加载会恢复侧栏默认值并隐藏右侧面板；拖动设置的宽度是整个框架共用的一份偏好，而非每个会话各自的属性。
-- **极窄窗口**——右侧面板关闭后，中栏仍可能小于 400px；左侧 56px 控制栏仍会保留。
+- **窄窗口**——在 768px 到右侧面板关闭之间，中栏仍可能在 56px 控制栏旁小于 400px；低于 768px 时控制栏消失。
+- **抽屉只在导航时关闭**——选中已显示的会话时抽屉保持打开；点按遮罩或抽屉自身的切换按钮即可关闭。
 - **轨道与面板仅在动画期间沿同一条曲线运动**——离散开合时框架设置 `data-animating`，其轨道过渡和占用方的滑入读取同一组时长与缓动变量；占用方若自用一套，挤压时面板边缘就会与会话界面的边缘脱开。拖拽和即时呈现切换不带过渡，因此该曲线不覆盖它们。
 - **挤压重排期间无滚动锚定**——布局变化可能移动读者的视口。
 

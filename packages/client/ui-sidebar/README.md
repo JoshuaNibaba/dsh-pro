@@ -51,6 +51,8 @@ On Windows Electron, `html[data-windows-titlebar]` fixes the sidebar toggle in t
 
 Under `html[data-platform='darwin']` (set only by the desktop preload) the expanded column opens with a 52px top strip that clears the hiddenInset traffic lights and carries the collapse toggle; the strip and the logo row below each mark themselves `data-window-drag`, so each row's own box is the window's drag region (ui-web base.css declares the one darwin drag rule), and the brand wordmark is not a New Session shortcut there — the dedicated New Session button keeps the action — and collapsing hides the column entirely instead of leaving the rail. The package registers `HeaderLeadingControls` into the frame's `shell.leading` window-chrome seat (ui-layout), which mounts it — the open-sidebar and New Session controls beside the traffic lights — only while the column is hidden, over every main panel. The [Desktop reference](../../../apps/desktop/README.md) owns window integration.
 
+Phone-width frames (below 768px, [ui-layout](../ui-layout/README.md)) also hide the closed column and mount the same `HeaderLeadingControls` at the top-left; the open sidebar there is a drawer over the conversation that closes once a Session or panel is chosen.
+
 ### Scrollbars
 
 Scrollbars in the column are a pointer affordance: the shell rebinds the scrollbar indirection to `transparent` whenever the pointer is outside the column and keeps the thumb drawn for 2s after the pointer leaves, so a list nobody is pointing at carries no bar. The reservation that keeps rows from moving belongs to the scrolling region (ui-workspace), so revealing a thumb never reflows.
