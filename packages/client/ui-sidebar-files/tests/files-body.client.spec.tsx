@@ -5,7 +5,7 @@ import { act, cleanup, fireEvent } from '@testing-library/react'
 import { makeTranslate, RemoteError } from '@deepseek-ai/dsh-client-test-runtime'
 import type { RemoteFailure } from '@deepseek-ai/dsh-api-remotes/client'
 import { fileAddressFor } from '@deepseek-ai/dsh-util-workspace-path'
-import { failureLine, orderEntries } from '../src/client/FilesBody.tsx'
+import { downloadFailureLine, failureLine, orderEntries } from '../src/client/FilesBody.tsx'
 import type { DirLevel } from '../src/client/store.ts'
 import { zh } from '../src/client/locales.ts'
 import { mountBody, ROOT, SESSION, TAB } from './mount.client.tsx'
@@ -149,13 +149,53 @@ describe('FilesBody', () => {
     const { view, script, tabActions } = mountBody()
     await act(() => script.watches.ready(ROOT))
     await act(() => script.settle({ ok: true, value: ROOT_LEVEL }))
-    fireEvent.click(view.container.querySelector(`[data-files-path="${ROOT}/README.md"] > button`)!)
+    fireEvent.click(view.getByRole('button', { name: 'README.md' }))
     // Every row sits under the tree's root, so the address is the path relative to it.
     expect(tabActions.openResource).toHaveBeenCalledWith(fileAddressFor(SESSION, ROOT, `${ROOT}/README.md`))
     expect(tabActions.openResource).toHaveBeenCalledWith('dsh-resource://file/session/s-test/README.md')
     const other = view.container.querySelector(`[data-files-path="${ROOT}/pipe"]`)!
     expect(other.querySelector('button')).toBeNull()
     expect(other.querySelector('[aria-disabled="true"]')?.getAttribute('title')).toBe(zh['entry.other'])
+  })
+
+  it('downloads a file from its row, shows progress there, and reports a failure under it until retried', async () => {
+    const { view, script, read, save } = mountBody()
+    await act(() => script.watches.ready(ROOT))
+    await act(() => script.settle({ ok: true, value: ROOT_LEVEL }))
+    // Directories and other entries offer no download.
+    expect(view.container.querySelector(`[data-files-path="${ROOT}/src"] [data-files-download]`)).toBeNull()
+    expect(view.container.querySelector(`[data-files-path="${ROOT}/pipe"] [data-files-download]`)).toBeNull()
+
+    let finish!: (outcome: Awaited<ReturnType<typeof read>>) => void
+    read.mockReturnValueOnce(new Promise((resolve) => { finish = resolve }))
+    const idle = view.getByRole('button', { name: '下载 README.md' })
+    expect(idle.getAttribute('title')).toBe('下载 README.md')
+    act(() => { fireEvent.click(idle) })
+    expect(read).toHaveBeenCalledWith(SESSION, `${ROOT}/README.md`, expect.any(AbortSignal))
+    const busy = view.getByRole('button', { name: '正在下载 README.md…' })
+    expect(busy.getAttribute('aria-busy')).toBe('true')
+    expect((busy as HTMLButtonElement).disabled).toBe(true)
+    await act(async () => { finish({ ok: false, failure: { kind: 'changed' } }) })
+    const alert = view.getByRole('alert')
+    expect(alert.textContent).toBe('没能下载 README.md：下载过程中文件被修改了，请重试。')
+    expect(alert.closest('[data-files-path]')?.getAttribute('data-files-path')).toBe(`${ROOT}/README.md`)
+
+    const data = new Blob(['# hi'])
+    read.mockResolvedValueOnce({ ok: true, data })
+    await act(async () => { fireEvent.click(view.getByRole('button', { name: '下载 README.md' })) })
+    expect(save).toHaveBeenCalledWith(data, 'README.md')
+    expect(view.queryByRole('alert')).toBeNull()
+    // The file row itself still opens the file rather than downloading it.
+    expect(read).toHaveBeenCalledTimes(2)
+  })
+
+  it('names the file in each download failure', () => {
+    const t = makeTranslate(zh)
+    expect(downloadFailureLine(t, 'a.txt', { kind: 'remote', failure: new RemoteError('workspace-file/not-found', 'gone', { path: 'a.txt' }) }))
+      .toBe('没能下载 a.txt：文件不在了，可能已被移动或删除。')
+    expect(downloadFailureLine(t, 'a.txt', { kind: 'remote', failure: new RemoteError('gateway/internal', 'boom', {}) }))
+      .toBe('没能下载 a.txt：boom')
+    expect(downloadFailureLine(t, 'a.txt', { kind: 'changed' })).toBe('没能下载 a.txt：下载过程中文件被修改了，请重试。')
   })
 
   it('marks a cut listing and an empty one', async () => {

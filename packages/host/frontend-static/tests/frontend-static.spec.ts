@@ -100,7 +100,9 @@ async function request(port: number, path: string, init?: RequestInit): Promise<
 
 describe('config', () => {
   it('accepts only relative directory prefixes as content-hashed paths', () => {
-    expect(new FrontendStatic.Config({ distIndex: '/dist/index.html' }).immutablePrefixes).toEqual([])
+    // A YAML row may omit the field; the validated config fills its default.
+    const omitted = { distIndex: '/dist/index.html' } as FrontendStatic.Config
+    expect(new FrontendStatic.Config(omitted).immutablePrefixes).toEqual([])
     expect(new FrontendStatic.Config({ distIndex: '/dist/index.html', immutablePrefixes: ['assets/'] }).immutablePrefixes)
       .toEqual(['assets/'])
     for (const prefix of ['assets', '/assets/', '\\assets/', '']) {

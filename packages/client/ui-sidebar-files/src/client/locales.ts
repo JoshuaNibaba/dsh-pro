@@ -13,7 +13,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-slots'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
-    /** File-tree type name, guide entry, row states, and failure lines. */
+    /** File-tree type name, guide entry, row states, download actions, and failure lines. */
     sidebarFiles: SidebarFilesKey
   }
 }
@@ -37,6 +37,11 @@ export const zh = {
   'error.outsideWorkspace': '这个目录在工作区之外，侧栏不会读取它。',
   'error.notDirectory': '这不是一个目录。',
   'error.unavailable': '读取失败：{message}',
+  'download.label': '下载 {name}',
+  'download.busy': '正在下载 {name}…',
+  'download.notFound': '没能下载 {name}：文件不在了，可能已被移动或删除。',
+  'download.changed': '没能下载 {name}：下载过程中文件被修改了，请重试。',
+  'download.failed': '没能下载 {name}：{message}',
 } satisfies Record<string, string>
 
 /** Files dictionary key union. */
@@ -61,4 +66,9 @@ export const en = {
   'error.outsideWorkspace': 'That directory is outside the workspace, so the sidebar will not read it.',
   'error.notDirectory': 'That is not a directory.',
   'error.unavailable': 'Read failed: {message}',
+  'download.label': 'Download {name}',
+  'download.busy': 'Downloading {name}…',
+  'download.notFound': 'Could not download {name}: the file is gone. It may have been moved or deleted.',
+  'download.changed': 'Could not download {name}: the file changed while downloading. Try again.',
+  'download.failed': 'Could not download {name}: {message}',
 } satisfies Record<SidebarFilesKey, string>
