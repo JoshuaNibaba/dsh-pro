@@ -36,6 +36,8 @@ curl -fsSL https://raw.githubusercontent.com/JoshuaNibaba/dsh-remote-mac/main/se
 
 > dsh 能在服务器上执行任意命令。开放网页访问时请使用足够长的密码,并始终使用 HTTPS。网关对密码错误有限流(同一 IP 连续 5 次错误锁定 15 分钟)。
 
+手机浏览器“添加到主屏幕”时,系统取图标和 manifest 的请求不带登录 cookie,所以网关不需登录就放行 dsh 的这几个公开静态文件:`/manifest.webmanifest`、`/favicon.svg`、`/favicon-dark.svg` 和 `/icons/*.png`(仅 GET/HEAD)。其他请求仍需登录。
+
 ## 2. 安装 Mac 客户端
 
 从 [Releases](https://github.com/JoshuaNibaba/dsh-remote-mac/releases/latest) 下载 `DSH-Remote.zip`,解压后把 `DSH Remote.app` 拖到「应用程序」。应用没有经过 Apple 公证,第一次打开时请右键点击应用并选择「打开」。也可以用命令行安装(不会触发该提示):

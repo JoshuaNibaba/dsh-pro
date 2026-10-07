@@ -28,6 +28,8 @@ import net from 'node:net'
 
 const COOKIE = 'dsh_gate'
 const PREFIX = '/__dsh'
+/** dsh's install metadata and icons, served without a session. */
+const PUBLIC_ASSET = /^\/(?:manifest\.webmanifest|favicon(?:-dark)?\.svg|icons\/[A-Za-z0-9-]+\.png)$/
 
 function parseArgs(argv) {
   const out = { command: argv[0] ?? 'serve', config: '/etc/dsh-remote/gateway.json' }
@@ -291,6 +293,11 @@ function serve(configFile) {
       return send(res, 303, '', { location: `${PREFIX}/login`, 'set-cookie': sessionCookie(config, '', 0) })
     }
     const exp = sessionExpiry(config, req)
+    // Home-screen installers fetch the manifest and launcher icons without cookies;
+    // these are dsh's public static files, so they bypass the login.
+    if (!exp && (req.method === 'GET' || req.method === 'HEAD') && PUBLIC_ASSET.test(url.pathname)) {
+      return proxy(req, res, undefined)
+    }
     if (!exp) {
       if (isPageLoad(req)) return send(res, 303, '', { location: `${PREFIX}/login?next=${encodeURIComponent(safeNext(req.url))}` })
       return send(res, 401, 'login required', { 'content-type': 'text/plain' })
