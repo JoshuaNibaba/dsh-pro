@@ -211,7 +211,7 @@ final class Tunnel {
         }
         let path = root.appendingPathComponent("control").path
         lock.unlock()
-        return try runner.run(s, command, options: ["-T", "-o", "ControlMaster=no", "-o", "ControlPath=\(path)",
+        return try runner.run(s, command, options: ["-F", "/dev/null", "-T", "-o", "ControlMaster=no", "-o", "ControlPath=\(path)",
                                                      "-o", "ProxyCommand=/usr/bin/false"], timeout: timeout)
     }
 
@@ -226,7 +226,10 @@ final class Tunnel {
             let running = process?.isRunning ?? false
             lock.unlock()
             if !running { return false }
-            if let path, FileManager.default.fileExists(atPath: path), Tunnel.canConnect(port: s.localPort) { return true }
+            if let path, FileManager.default.fileExists(atPath: path), Tunnel.canConnect(port: s.localPort) {
+                pollProgress()
+                return true
+            }
             Thread.sleep(forTimeInterval: 0.05)
         }
         return false

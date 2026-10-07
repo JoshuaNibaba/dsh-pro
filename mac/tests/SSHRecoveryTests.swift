@@ -295,6 +295,8 @@ struct SSHRecoveryTests {
             IdentityAgent none
             UserKnownHostsFile \(root.path)/known-hosts
             GlobalKnownHostsFile /dev/null
+        Host fixture
+            HostName 127.0.0.1
         """.write(to: clientConfig, atomically: true, encoding: .utf8)
         let wrapper = root.appendingPathComponent("ssh")
         try """
@@ -302,7 +304,7 @@ struct SSHRecoveryTests {
         exec /usr/bin/ssh -F "$(dirname "$0")/client-config" "$@"
         """.write(to: wrapper, atomically: true, encoding: .utf8)
         try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: wrapper.path)
-        let s = Settings(server: "127.0.0.1", sshPort: sshPort, sshUser: NSUserName(), webURL: "",
+        let s = Settings(server: "fixture", sshPort: sshPort, sshUser: NSUserName(), webURL: "",
                          preferSSH: true, autoUpdate: false, remotePort: sshPort,
                          localPort: try unusedPort(), service: "fixture")
         let tunnel = Tunnel(executableURL: wrapper)
@@ -314,7 +316,7 @@ struct SSHRecoveryTests {
         let runner = SSHCommand(executableURL: wrapper)
         let output = try tunnel.run(s, "printf 'http://127.0.0.1:18790/?token=fixture\\n'", using: runner)
         precondition(SSH.localLoginURL(output, port: s.localPort)?.port == s.localPort)
-        precondition(progress.contains(where: { $0.contains("Authenticated to ") }), "Authentication timing must be recorded")
+        precondition(progress.contains(where: { $0.contains("Authenticated to ") }), "Authentication timing must be recorded: \(progress)")
         let firstLog = try String(contentsOf: serverLog, encoding: .utf8)
         precondition(firstLog.components(separatedBy: "Accepted publickey for").count - 1 == 1,
                      "Fetching the URL must reuse the tunnel's authentication")
