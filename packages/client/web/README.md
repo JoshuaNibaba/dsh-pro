@@ -84,6 +84,7 @@ The boot kernel delegates manifest entry creation to Client Modules so live grap
 | [`src/boot-page.ts`](src/boot-page.ts) | Framework-free boot page: spinner, per-entry status, failure rendering |
 | [`src/platform.ts`](src/platform.ts) | `PLATFORM_MODULES` / `PRELOADED_CLIENT_EXTERNALS`: the implicit external baseline |
 | [`src/seed.ts`](src/seed.ts) | Static module table handed to the loader at boot |
+| [`src/base.css`](src/base.css) | Mount defaults: a `#root` sized to the dynamic viewport and padded by the safe-area insets the document's `viewport-fit=cover` exposes, fonts, and the darwin drag rules |
 | [`src/window-drag/regions.ts`](src/window-drag/regions.ts) | The darwin app-region composition model, and the interactive selector `base.css` subtracts |
 | [`src/window-drag/recall.ts`](src/window-drag/recall.ts) | The shell's one window drag-rect watcher (electron/electron#32341): measure the marked rows per frame and pulse the recall mark while they move |
 

@@ -99,8 +99,9 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
     /**
      * Window-chrome seat at the frame's top-left, over every main panel.
      * Mounted only while the sidebar column is fully hidden (macOS desktop
-     * collapse; other platforms keep the rail), so the occupant can assume the
-     * frame edge is the window edge and the macOS traffic lights sit before it.
+     * collapse, and a closed sidebar on a frame narrower than 768px; other
+     * frames keep the rail), so the occupant can assume the frame edge is the
+     * window edge; on macOS the traffic lights sit before it.
      * OCCUPIED by ui-sidebar's reopen/New Session controls.
      *
      * While the seat is mounted the frame publishes
@@ -122,7 +123,11 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 export interface SidebarOwnerProps {
   /** True when the sidebar is closed (the column renders the compact control rail). */
   collapsed: boolean
-  /** Rendered column width in px (SIDEBAR_COLLAPSED when collapsed). */
+  /**
+   * Rendered width in px: the column track, which is SIDEBAR_COLLAPSED or 0 when
+   * collapsed; below 768px the open sidebar is a drawer over the centre, at most
+   * its preference and always 56px short of the frame.
+   */
   width: number
 }
 

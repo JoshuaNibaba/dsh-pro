@@ -87,9 +87,9 @@ export function apply(ctx: ClientContext): void {
     },
     inject: injectProps,
   }, SidebarRoot))
-  // macOS desktop hides the collapsed sidebar entirely, so the open/New
-  // Session controls move into the frame's window-chrome seat beside the
-  // traffic lights; the occupant reuses the shell's injected actions, and
+  // macOS desktop and phone-width frames hide the collapsed sidebar entirely,
+  // so the open/New Session controls move into the frame's top-left seat
+  // (beside the traffic lights on macOS); the occupant reuses the shell's injected actions, and
   // the AppFrame mounts the seat only while the column is fully hidden.
   ctx.slots.inject('shell.leading', () => ctx.slots.register({
     name: 'shell.leading',

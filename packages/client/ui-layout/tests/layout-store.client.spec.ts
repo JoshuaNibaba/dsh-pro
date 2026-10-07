@@ -63,6 +63,17 @@ describe('createLayoutStore', () => {
     expect(store.getSnapshot().layoutInfo).toMatchObject({ sidebar: 400, narrowExpanded: false })
   })
 
+  it('dismisses the narrow override without touching the wide preference', () => {
+    const { store, actions } = createLayoutStore().create()
+    actions.setSidebar(400)
+    actions.setViewportWidth(390)
+    actions.toggleSidebar()
+    actions.closeNarrowSidebar()
+    expect(store.getSnapshot().layoutInfo).toMatchObject({ sidebar: 400, narrowExpanded: false })
+    actions.closeNarrowSidebar()
+    expect(store.getSnapshot().layoutInfo.narrowExpanded).toBe(false)
+  })
+
   it('clears the manual override only when crossing 1024px', () => {
     const { store, actions } = createLayoutStore().create()
     actions.setViewportWidth(980)

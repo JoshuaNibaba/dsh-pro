@@ -21,6 +21,11 @@ export const SIDEBAR_COLLAPSED = 56
  * LG breakpoint); a manual toggle below it re-expands over the squeezed center
  * (stores.ts narrowExpanded). */
 export const SIDEBAR_AUTO_COLLAPSE = 1024
+/** Viewport width below which (phones) the closed sidebar takes no track and the
+ * open sidebar is a drawer over the center instead of a column beside it. */
+export const SIDEBAR_OVERLAY = 768
+/** Center strip a drawer leaves uncovered, so the backdrop stays tappable. */
+export const SIDEBAR_OVERLAY_GUTTER = 56
 /** Right column drag clamp floor. */
 export const RIGHTBAR_MIN = 300
 /** Maximum normal right panel width as a fraction of the frame. */

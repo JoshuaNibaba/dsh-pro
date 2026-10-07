@@ -19,8 +19,12 @@ import type { ReactNode } from 'react'
 import type {
   PropsLocale, PropsRenderSlots, PropsRuntime, PropsStore,
 } from '@deepseek-ai/dsh-client-ui-slots'
-import { CENTER_MIN, clampWidth, computeColumns, RIGHTBAR_DEFAULT_RATIO, RIGHTBAR_MAX_RATIO, RIGHTBAR_MIN, SIDEBAR_AUTO_COLLAPSE, SIDEBAR_COLLAPSED, SIDEBAR_DEFAULT } from './columns.ts'
+import {
+  CENTER_MIN, clampWidth, computeColumns, RIGHTBAR_DEFAULT_RATIO, RIGHTBAR_MAX_RATIO, RIGHTBAR_MIN, SIDEBAR_AUTO_COLLAPSE,
+  SIDEBAR_COLLAPSED, SIDEBAR_DEFAULT, SIDEBAR_OVERLAY, SIDEBAR_OVERLAY_GUTTER,
+} from './columns.ts'
 import { DocumentTitle } from './DocumentTitle.tsx'
+import { DrawerNavigation } from './DrawerNavigation.tsx'
 import type { createLayoutStore } from './stores.ts'
 import css from './AppFrame.module.css'
 
@@ -158,20 +162,25 @@ export function AppFrame({
   }, [actions])
 
   const narrow = viewport < SIDEBAR_AUTO_COLLAPSE
+  // Phones: no rail, and an open sidebar is a drawer over the centre, so the
+  // centre keeps the whole width in both states.
+  const overlay = viewport < SIDEBAR_OVERLAY
   const sidebarCollapsed = narrow ? !layoutInfo.narrowExpanded : layoutInfo.sidebar === 0
   const sidebarPreference = sidebarCollapsed
     ? 0
     : layoutInfo.sidebar === 0 ? SIDEBAR_DEFAULT : layoutInfo.sidebar
+  const trackPreference = overlay ? 0 : sidebarPreference
+  const drawerWidth = Math.min(sidebarPreference, viewport - SIDEBAR_OVERLAY_GUTTER)
   const rightbarPreference = layoutInfo.rightbar ?? viewport * RIGHTBAR_DEFAULT_RATIO
   // Desktop reopen controls occupy the frame's shell.leading seat (macOS) or
-  // the Windows caption row; neither platform keeps an icon rail.
+  // the Windows caption row; neither platform keeps an icon rail, nor do phones.
   const darwin = document.documentElement.dataset.platform === 'darwin'
-  const collapsedWidth = darwin
+  const collapsedWidth = darwin || overlay
     || document.documentElement.hasAttribute('data-windows-titlebar') ? 0 : SIDEBAR_COLLAPSED
   // Opening on a narrow frame collapses the left sidebar. Eligibility must
   // include that space before the occupant's first shown report arrives.
-  const normal = computeColumns(viewport, !layoutInfo.rightbarShown && narrow ? 0 : sidebarPreference, rightbarPreference, collapsedWidth)
-  const cols = computeColumns(viewport, sidebarPreference, layoutInfo.rightbarTrack ? rightbarPreference : 0, collapsedWidth)
+  const normal = computeColumns(viewport, !layoutInfo.rightbarShown && narrow ? 0 : trackPreference, rightbarPreference, collapsedWidth)
+  const cols = computeColumns(viewport, trackPreference, layoutInfo.rightbarTrack ? rightbarPreference : 0, collapsedWidth)
   const colsRef = useRef(cols)
   colsRef.current = cols
   const rightbarWidth = useRef(normal.rightbar)
@@ -239,10 +248,13 @@ export function AppFrame({
   // whole and was corrected two frames later — visible jitter. cols keeps only
   // the discrete decisions (track present, collapse state) and the drag base.
   const rightbarMax = cols.rightbar === 0 ? 0 : clampWidth(rightbarPreference, RIGHTBAR_MIN, viewport * RIGHTBAR_MAX_RATIO)
+  const sidebarWidth = overlay && !sidebarCollapsed ? drawerWidth : cols.sidebar
   const sidebar = useMemo(() => renderSlot('sidebar', {
     collapsed: sidebarCollapsed,
-    width: cols.sidebar,
-  }), [renderSlot, sidebarCollapsed, cols.sidebar])
+    width: sidebarWidth,
+  }), [renderSlot, sidebarCollapsed, sidebarWidth])
+  const drawerOpen = overlay && !sidebarCollapsed
+  const closeDrawer = useCallback(() => { actions.closeNarrowSidebar() }, [actions])
   const main = useMemo(() => (
     <MainPanel usePanelInfo={usePanelInfo} renderSlot={renderSlot} />
   ), [usePanelInfo, renderSlot])
@@ -253,7 +265,7 @@ export function AppFrame({
   // row (ui-sidebar). AppFrame.module.css publishes the matching
   // --dsh-frame-leading-clearance under the same collapsed condition.
   const leading = useMemo(() => renderSlot('shell.leading', {}), [renderSlot])
-  const leadingMounted = darwin && sidebarCollapsed
+  const leadingMounted = (darwin || overlay) && sidebarCollapsed
 
   return (
     <div
@@ -266,6 +278,7 @@ export function AppFrame({
           `${cols.sidebar}px minmax(${cols.rightbar === 0 ? 0 : CENTER_MIN}px, 1fr) minmax(0px, ${rightbarMax}px)`,
       }}
       data-sidebar-collapsed={sidebarCollapsed || undefined}
+      data-sidebar-overlay={overlay || undefined}
       data-rightbar-collapsed={cols.rightbar === 0 || undefined}
       data-rightbar-fullscreen={layoutInfo.rightbarFullscreen || undefined}
       data-rightbar-instant={layoutInfo.rightbarInstant || undefined}
@@ -277,9 +290,16 @@ export function AppFrame({
         useSessions={useSessions}
         usePanelInfo={usePanelInfo}
       />
-      <div className={css.sidebarCol}>
+      <div className={css.sidebarCol} style={drawerOpen ? { width: drawerWidth } : undefined}>
         {sidebar}
       </div>
+      {drawerOpen && (
+        <>
+          {/* Pointer dismissal only; the drawer's own toggle is the accessible control. */}
+          <div className={css.drawerBackdrop} data-sidebar-backdrop aria-hidden="true" onClick={closeDrawer} />
+          <DrawerNavigation useSessions={useSessions} usePanelInfo={usePanelInfo} onNavigate={closeDrawer} />
+        </>
+      )}
       <>
         <CenterColumn>{main}</CenterColumn>
         <RightbarColumn>
@@ -294,8 +314,8 @@ export function AppFrame({
           {leading}
         </div>
       )}
-      {/* The collapsed rail is fixed-width: no resize handle while closed. */}
-      {!sidebarCollapsed && <DragHandle side="sidebar" left={cols.sidebar} onStart={onSidebarStart} onDrag={onSidebarDrag} onEnd={onDragEnd} />}
+      {/* The collapsed rail is fixed-width and the drawer is not a column: no resize handle. */}
+      {!sidebarCollapsed && !overlay && <DragHandle side="sidebar" left={cols.sidebar} onStart={onSidebarStart} onDrag={onSidebarDrag} onEnd={onDragEnd} />}
       {layoutInfo.rightbarShown && !layoutInfo.rightbarFullscreen && normal.rightbar > 0 && (
         <DragHandle side="rightbar" left={viewport - normal.rightbar} onStart={onRightbarStart} onDrag={onRightbarDrag} onEnd={onDragEnd} />
       )}
