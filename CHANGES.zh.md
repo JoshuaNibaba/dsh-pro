@@ -125,6 +125,10 @@ Anthropic 使用 `web_search_20250305`；OpenAI Responses、Azure Responses、Co
 
 宽度低于 768px 时，[布局框架](https://github.com/JoshuaNibaba/dsh-pro/blob/custom/packages/client/ui-layout/README.zh.md)去掉 56px 控制栏，在左上角挂载 `shell.leading` 的打开侧栏/新会话控件（原先仅限 macOS），并把侧边栏以带遮罩的抽屉形式覆盖在对话之上；主视图的会话或面板改变时，`DrawerNavigation` 通过新增的 store 动作 `closeNarrowSidebar` 关闭抽屉。[base.css](https://github.com/JoshuaNibaba/dsh-pro/blob/custom/packages/client/web/src/base.css) 把 `#root` 设为 `100dvh` 并按安全区留白。[Web 外壳](https://github.com/JoshuaNibaba/dsh-pro/blob/custom/apps/web/index.html)新增 `viewport-fit=cover`、`apple-touch-icon` 和带凭据的 manifest 链接，因为 DSH Remote 密码网关会用登录页回应匿名的 manifest 请求。[manifest](https://github.com/JoshuaNibaba/dsh-pro/blob/custom/apps/web/public/manifest.webmanifest) 改为 `standalone`，并列出 `apps/web/public/icons/` 下的 PNG 图标，它们由桌面图标 `apps/desktop/resources/icon.svg` 渲染（maskable 版本让鲸鱼位于 80% 安全区内）。合并时保留断点常量、让抽屉脱离文档流时中栏仍留在原列的显式 grid 列、手机控件位置对 darwin 的排除，以及图标文件。测试为 [AppFrame](https://github.com/JoshuaNibaba/dsh-pro/blob/custom/packages/client/ui-layout/tests/app-frame.client.spec.tsx)、[布局 store](https://github.com/JoshuaNibaba/dsh-pro/blob/custom/packages/client/ui-layout/tests/layout-store.client.spec.ts) 和 [PWA 元数据](https://github.com/JoshuaNibaba/dsh-pro/blob/custom/apps/web/tests/pwa-manifest.e2e.ts)。
 
+### 9. Host 更新后自动刷新
+
+[HMR 浏览器半侧](https://github.com/JoshuaNibaba/dsh-pro/blob/custom/packages/client/hmr/src/client/index.ts)把每次（重新）连接 `/plugins/events` 后收到的第一张图与 `ctx.modules.manifest.rev` 比较，不同时调用 `location.reload()`。官方版本在这帧上原地替换所有变化的插件；重新部署后多个插件同时变化，`SlotAssemblyError` 逃出渲染器，React 根节点卸载，页面白屏。连接期间收到的图变化和重建仍实时应用。合并时保留 `open` 时重置的 `opening` 标志、revision 比较和 `internals.reloadPage` 替换点；[transport 测试](https://github.com/JoshuaNibaba/dsh-pro/blob/custom/packages/client/hmr/tests/transport.client.spec.ts)覆盖它们。
+
 <a id="conflicts"></a>
 ## 冲突与生成文件
 
@@ -198,7 +202,7 @@ git push origin custom
 <a id="validation"></a>
 ## 验收与部署
 
-以下测试命令，加上构建后运行的 `pnpm exec vitest run --config vitest.web.config.ts apps/web/tests/pwa-manifest.e2e.ts`，覆盖目前八组定制的行为接入点，包含脚本漏掉的状态栏和 RPC owner 测试：
+以下测试命令，加上构建后运行的 `pnpm exec vitest run --config vitest.web.config.ts apps/web/tests/pwa-manifest.e2e.ts`，覆盖目前九组定制的行为接入点，包含脚本漏掉的状态栏和 RPC owner 测试：
 
 ```sh
 pnpm exec vitest run \
@@ -211,7 +215,7 @@ pnpm exec vitest run \
   packages/client/connection/tests/rpc-owner.host.spec.ts \
   packages/client/ui-server-status \
   packages/host/frontend-static packages/bundle/web-app/tests/web-app.spec.ts \
-  packages/client/ui-sidebar-files packages/client/ui-layout
+  packages/client/ui-sidebar-files packages/client/ui-layout packages/client/hmr
 pnpm run verify-persistence-changes
 pnpm run doc-sync
 pnpm run lint

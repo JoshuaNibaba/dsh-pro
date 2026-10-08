@@ -43,6 +43,7 @@ CUSTOM_TESTS=(
   packages/bundle/web-app/tests/web-app.spec.ts
   packages/client/ui-sidebar-files
   packages/client/ui-layout
+  packages/client/hmr
 )
 
 die() { echo "dsh-custom: $*" >&2; exit 1; }

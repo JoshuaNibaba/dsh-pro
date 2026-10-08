@@ -125,6 +125,10 @@ Every file row in the [right Sidebar file tree](https://github.com/JoshuaNibaba/
 
 Below 768px the [layout frame](https://github.com/JoshuaNibaba/dsh-pro/blob/custom/packages/client/ui-layout/README.md) drops the 56px rail, mounts the `shell.leading` reopen/New Session controls at the top-left (formerly macOS only), and opens the sidebar as a drawer over the conversation with a backdrop; `DrawerNavigation` closes it when the main view's Session or panel changes, through the new `closeNarrowSidebar` store action. [base.css](https://github.com/JoshuaNibaba/dsh-pro/blob/custom/packages/client/web/src/base.css) sizes `#root` to `100dvh` and pads it by the safe-area insets. The [Web shell](https://github.com/JoshuaNibaba/dsh-pro/blob/custom/apps/web/index.html) adds `viewport-fit=cover`, an `apple-touch-icon`, and a credentialed manifest link, because the DSH Remote password gateway answers an anonymous manifest fetch with its login. The [manifest](https://github.com/JoshuaNibaba/dsh-pro/blob/custom/apps/web/public/manifest.webmanifest) switches to `standalone` and lists PNG icons under `apps/web/public/icons/`, rendered from the desktop tile `apps/desktop/resources/icon.svg` (the maskable one keeps the whale in the 80% safe zone). Preserve the breakpoint constants, the explicit grid columns that keep the centre in place while the drawer is out of flow, the darwin exclusion of the phone seat placement, and the icon files. Tests: [AppFrame](https://github.com/JoshuaNibaba/dsh-pro/blob/custom/packages/client/ui-layout/tests/app-frame.client.spec.tsx), [layout store](https://github.com/JoshuaNibaba/dsh-pro/blob/custom/packages/client/ui-layout/tests/layout-store.client.spec.ts) and [PWA metadata](https://github.com/JoshuaNibaba/dsh-pro/blob/custom/apps/web/tests/pwa-manifest.e2e.ts).
 
+### 9. Reload after a Host update
+
+The [HMR browser half](https://github.com/JoshuaNibaba/dsh-pro/blob/custom/packages/client/hmr/src/client/index.ts) compares the first graph of every (re)connected `/plugins/events` stream with `ctx.modules.manifest.rev` and calls `location.reload()` when they differ. Upstream replaced every changed plugin in place on that frame; after a redeploy several plugins changed at once, a `SlotAssemblyError` escaped the renderer, and the React root unmounted to a blank page. Graphs and rebuilds received during a connection still apply live. Preserve the `opening` flag reset on `open`, the revision comparison, and the `internals.reloadPage` seam; the [transport test](https://github.com/JoshuaNibaba/dsh-pro/blob/custom/packages/client/hmr/tests/transport.client.spec.ts) covers them.
+
 <a id="conflicts"></a>
 ## Conflicts and generated files
 
@@ -198,7 +202,7 @@ git push origin custom
 <a id="validation"></a>
 ## Validation and deployment
 
-These focused tests, with `pnpm exec vitest run --config vitest.web.config.ts apps/web/tests/pwa-manifest.e2e.ts` after a build, cover the current eight groups of customizations, including server-status and RPC owner suites omitted by the script:
+These focused tests, with `pnpm exec vitest run --config vitest.web.config.ts apps/web/tests/pwa-manifest.e2e.ts` after a build, cover the current nine groups of customizations, including server-status and RPC owner suites omitted by the script:
 
 ```sh
 pnpm exec vitest run \
@@ -211,7 +215,7 @@ pnpm exec vitest run \
   packages/client/connection/tests/rpc-owner.host.spec.ts \
   packages/client/ui-server-status \
   packages/host/frontend-static packages/bundle/web-app/tests/web-app.spec.ts \
-  packages/client/ui-sidebar-files packages/client/ui-layout
+  packages/client/ui-sidebar-files packages/client/ui-layout packages/client/hmr
 pnpm run verify-persistence-changes
 pnpm run doc-sync
 pnpm run lint
