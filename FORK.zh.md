@@ -31,6 +31,7 @@ node apps/cli/lib/bin.js web
 | Web 静态资源长期缓存 | `assets/` 下带内容哈希的文件以 `Cache-Control: public, max-age=31536000, immutable` 提供。 |
 | 文件树下载 | 右侧 Sidebar 文件树可下载工作区文件。 |
 | 手机布局 | 宽度小于 768px 时侧栏以抽屉方式打开，Web 应用提供可安装的 PNG 启动图标。 |
+| Host 更新后自动刷新 | Web 页面重连到已换用其他客户端插件包重启的 Host 时自动重新加载，而不是原地替换插件后白屏。 |
 
 ## 兼容性
 

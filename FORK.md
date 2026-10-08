@@ -31,6 +31,7 @@ Update with `git pull --ff-only`, then `pnpm install` and `pnpm run build`; run 
 | Immutable Web asset caching | Content-hashed files under `assets/` are served with `Cache-Control: public, max-age=31536000, immutable`. |
 | File tree download | The right Sidebar file tree can download workspace files. |
 | Phone layout | Below 768px the sidebar opens as a drawer, and the Web app provides installable PNG launcher icons. |
+| Reload after a Host update | A Web page that reconnects to a Host restarted with other client bundles reloads itself, instead of replacing its plugins in place and going blank. |
 
 ## Compatibility
 
