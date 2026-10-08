@@ -213,20 +213,26 @@ cmd_release() {
   command -v gh >/dev/null || die "需要 gh(GitHub CLI)"
   git fetch -q origin --tags
   [ "$(git rev-parse "$BRANCH")" = "$(git rev-parse "origin/$BRANCH")" ] || die "$BRANCH 与 origin/$BRANCH 不一致，先推送"
-  local base ver n tag notes
+  local base ver n tag notes repo
+  repo="$(git remote get-url origin | sed -E 's#^(https://github.com/|git@github.com:)##; s#\.git$##')"
   base="$(base_tag)"; ver="${base#dsh-v}"
   n=1; while git rev-parse -q --verify "refs/tags/custom-v$ver.$n" >/dev/null; do n=$((n + 1)); done
   tag="custom-v$ver.$n"
+  # An earlier run may have pushed the tag of this exact commit without creating its release.
+  if [ "$n" -gt 1 ] && [ "$(git rev-parse "custom-v$ver.$((n - 1))^{commit}")" = "$(git rev-parse "$BRANCH")" ]; then
+    tag="custom-v$ver.$((n - 1))"
+    gh release view "$tag" -R "$repo" >/dev/null 2>&1 && die "$BRANCH 已发布为 $tag"
+  fi
   notes="$(mktemp)"
   {
-    echo "基于官方 [$base](https://github.com/deepseek-ai/deepseek-harness/releases/tag/$base) 的非官方 fork 版本。改动说明见 [FORK.zh.md](https://github.com/$(gh repo view --json nameWithOwner -q .nameWithOwner)/blob/$tag/FORK.zh.md)。"
+    echo "基于官方 [$base](https://github.com/deepseek-ai/deepseek-harness/releases/tag/$base) 的非官方 fork 版本。改动说明见 [FORK.zh.md](https://github.com/$repo/blob/$tag/FORK.zh.md)。"
     echo
     echo "## 本 fork 的提交"
     git log --no-merges --format='- %s (%h)' "$base..$BRANCH"
   } >"$notes"
-  git tag -a "$tag" -m "$tag (based on $base)" "$BRANCH"
+  git rev-parse -q --verify "refs/tags/$tag" >/dev/null || git tag -a "$tag" -m "$tag (based on $base)" "$BRANCH"
   git push origin "$tag"
-  gh release create "$tag" --verify-tag --title "$tag" --notes-file "$notes" --prerelease
+  gh release create "$tag" -R "$repo" --verify-tag --title "$tag" --notes-file "$notes" --prerelease
   rm -f "$notes"
 }
 
