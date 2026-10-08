@@ -82,9 +82,9 @@ export class HostConnectionService extends Service implements HostConnectionHand
     ctx.effect(() => () => this.operator.dispose(), 'client-connection: operator Peer')
   }
 
-  /** Generic channel registry scoped to the Context reading this service. */
+  /** Generic channel registry owned by the caller fiber; HTTP handlers require its webServer injection. */
   get rpc(): HostConnectionRpc {
-    const owner = this.ctx
+    const owner = this.ctx.fiber.ctx
     return {
       handle: (channel, handler) => this.register(owner, channel, handler),
       intercept: (channel, matches, handler) =>

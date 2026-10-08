@@ -1,0 +1,14 @@
+- name: cordis:web-server
+  config:
+    host: 127.0.0.1
+    port: 0
+- name: cordis:credentials
+- name: cordis:connection
+- name: cordis:rpc-owner
+  id: first
+  config:
+    channel: /first
+- name: cordis:rpc-owner
+  id: second
+  config:
+    channel: /second
