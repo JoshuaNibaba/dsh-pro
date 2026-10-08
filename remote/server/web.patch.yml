@@ -1,0 +1,11 @@
+# dsh web overlay for DSH Remote (run-web.sh passes it with --patch).
+#
+# dsh terminates a browser WebSocket that misses one Ping/Pong round, by default
+# within about 6 s (2 s interval). Remote clients reach the server through
+# Cloudflare and long-haul links whose stalls routinely exceed that, so the UI kept
+# reconnecting. 15 s tolerates stalls of 30-45 s and still pings well inside
+# Cloudflare's 100 s idle timeout.
+- id: typert-gateway
+  name: "@deepseek-ai/dsh-api-gateway"
+  config:
+    websocketHeartbeatIntervalMs: 15000

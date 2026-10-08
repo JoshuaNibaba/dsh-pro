@@ -1,0 +1,63 @@
+# Builds DSH Remote.app on macOS for every push to main and publishes it as
+# release v1.0.<run number>; the app's updater reads the latest release.
+name: build
+
+on:
+  push:
+    branches: [main]
+    paths: ["mac/**", ".github/workflows/build.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-main
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Test theme integration
+        run: |
+          node --test mac/tests/chrome.test.mjs
+          xcrun swiftc -swift-version 5 -framework AppKit -framework WebKit \
+            mac/Chrome.swift mac/tests/ChromeTests.swift -o "$RUNNER_TEMP/dsh-chrome-tests"
+          "$RUNNER_TEMP/dsh-chrome-tests"
+
+      - name: Test SSH recovery
+        run: |
+          if ! xcrun swiftc -swift-version 5 mac/Settings.swift mac/SSH.swift mac/SSHCommand.swift mac/SSHRecovery.swift \
+            mac/tests/SSHRecoveryTests.swift -o "$RUNNER_TEMP/dsh-ssh-tests" 2> "$RUNNER_TEMP/dsh-ssh-compile.log"; then
+            while IFS= read -r line; do echo "::error::$line"; done < "$RUNNER_TEMP/dsh-ssh-compile.log"
+            exit 1
+          fi
+          if ! "$RUNNER_TEMP/dsh-ssh-tests" > "$RUNNER_TEMP/dsh-ssh-test.log" 2>&1; then
+            while IFS= read -r line; do echo "::error::$line"; done < "$RUNNER_TEMP/dsh-ssh-test.log"
+            exit 1
+          fi
+          cat "$RUNNER_TEMP/dsh-ssh-test.log"
+
+      - name: Build
+        env:
+          BUILD_NUMBER: ${{ github.run_number }}
+          UPDATE_REPO: ${{ github.repository }}
+        run: |
+          if ! ./mac/build.sh --no-install > "$RUNNER_TEMP/dsh-build.log" 2>&1; then
+            while IFS= read -r line; do echo "::error::$line"; done < "$RUNNER_TEMP/dsh-build.log"
+            exit 1
+          fi
+          cat "$RUNNER_TEMP/dsh-build.log"
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="v1.0.${{ github.run_number }}"
+          gh release create "$tag" mac/build/DSH-Remote.zip \
+            --title "DSH Remote 1.0.${{ github.run_number }}" \
+            --notes "$(git log -1 --format=%s)" \
+            --target "$GITHUB_SHA" --latest
