@@ -20,7 +20,7 @@ Without --domain, dsh is reachable only through SSH tunnels (DSH Remote's SSH mo
 EOF
 }
 
-REPO="${DSH_REMOTE_REPO:-JoshuaNibaba/dsh-remote-mac}"
+REPO="${DSH_REMOTE_REPO:-JoshuaNibaba/dsh-pro}" REF="${DSH_REMOTE_REF:-custom}"
 DOMAIN="" TLS="letsencrypt" EMAIL="" PASSWORD="" WORKDIR="/home/dsh/workspace" DSH_VERSION="latest" COPY_KEYS=1
 WEB_PORT=18790 GATEWAY_PORT=18800
 while [ $# -gt 0 ]; do
@@ -42,13 +42,15 @@ command -v apt-get >/dev/null || { echo "this installer supports Debian/Ubuntu o
 export DEBIAN_FRONTEND=noninteractive
 step() { printf '\n==> %s\n' "$*"; }
 
-# Source files: next to this script, or downloaded from GitHub when piped through curl.
+# Source files: next to this script (remote/server in a clone), or downloaded one by
+# one from GitHub when piped through curl, which avoids fetching the whole repository.
 SRC="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || true)"
 if [ ! -f "$SRC/gateway.mjs" ]; then
-  step "Downloading $REPO"
-  tmp="$(mktemp -d)"
-  curl -fsSL "https://github.com/$REPO/archive/refs/heads/main.tar.gz" | tar -xz -C "$tmp" --strip-components=1
-  SRC="$tmp/server"
+  step "Downloading remote/server from $REPO@$REF"
+  SRC="$(mktemp -d)"
+  for f in run-web.sh web.patch.yml gateway.mjs dsh-update nginx-acme.conf nginx-http.conf nginx-https.conf; do
+    curl -fsSL "https://raw.githubusercontent.com/$REPO/$REF/remote/server/$f" -o "$SRC/$f"
+  done
 fi
 
 step "System packages"

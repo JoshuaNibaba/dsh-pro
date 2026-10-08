@@ -1,102 +1,108 @@
 # DSH Remote
 
-在自己的服务器上运行 [DeepSeek Harness](https://github.com/deepseek-ai/DeepSeek-Harness) 的 Web 界面(`dsh web`),然后从 Mac 客户端、浏览器或手机远程使用。
+English | [中文](README.zh.md)
 
-- **Mac 客户端**(`mac/`):原生 macOS 应用(WKWebView,几百 KB)。填网页地址和访问密码即可登录，和浏览器一样;也可以用本机 SSH key 建立隧道。支持应用内自动更新。标题栏颜色随 dsh 的主题(浅色/深色/自定义主题)变化。
-- **服务端**(`server/`):一键安装脚本。dsh 只监听服务器的 127.0.0.1;可选地在前面加一个密码登录网关和 HTTPS,让浏览器和手机也能访问,登录后长期保持。
-- **命令行**(`cli/dsh-remote`):可选的终端工具。
+Run the [DeepSeek Harness](https://github.com/deepseek-ai/DeepSeek-Harness) Web UI (`dsh web`) on your own server and use it remotely from a Mac client, a browser, or a phone. DSH Remote is a subproject of [DSH Pro](../FORK.md) and lives in the `remote/` directory of the DSH Pro repository.
 
-## 1. 安装服务端
+- **Mac client** (`mac/`): a native macOS app (WKWebView, a few hundred KB). Enter the web address and access password to log in, as in a browser, or open a tunnel with this Mac's SSH key. It updates itself, and its title bar follows the dsh theme (light, dark, or a custom theme).
+- **Server** (`server/`): a one-step installer. dsh listens only on the server's 127.0.0.1; optionally a password login gateway and HTTPS in front of it let browsers and phones connect, and a login lasts a long time.
+- **CLI** (`cli/dsh-remote`): an optional terminal tool.
 
-在一台 Debian/Ubuntu 服务器上以 root 运行:
+## 1. Install the server
+
+Run as root on a Debian/Ubuntu server:
 
 ```sh
-# 只允许 SSH 访问(Mac 客户端走 SSH 隧道)
-curl -fsSL https://raw.githubusercontent.com/JoshuaNibaba/dsh-remote-mac/main/server/install.sh | bash
+# SSH access only (the Mac client uses an SSH tunnel)
+curl -fsSL https://raw.githubusercontent.com/JoshuaNibaba/dsh-pro/custom/remote/server/install.sh | bash
 
-# 同时开放浏览器 / 手机访问(需要一个指向该服务器的域名)
-curl -fsSL https://raw.githubusercontent.com/JoshuaNibaba/dsh-remote-mac/main/server/install.sh | bash -s -- --domain dsh.example.com
+# Also allow browsers and phones (needs a domain that points to this server)
+curl -fsSL https://raw.githubusercontent.com/JoshuaNibaba/dsh-pro/custom/remote/server/install.sh | bash -s -- --domain dsh.example.com
 ```
 
-脚本会安装 Node.js 22 和 `@deepseek-ai/dsh`,创建无特权用户 `dsh`,配置 systemd 服务 `dsh-web`(只监听 `127.0.0.1:18790`)。加上 `--domain` 时还会:
+In a DSH Pro clone you can run `bash remote/server/install.sh [options]` directly. When run through curl, the script downloads only the files it needs from `remote/server/` on GitHub; the `DSH_REMOTE_REPO=<owner>/<repo>` and `DSH_REMOTE_REF=<branch>` environment variables change the source.
 
-- 安装密码网关 `dsh-gateway`(`127.0.0.1:18800`)和 nginx 站点;
-- 用 Let's Encrypt 申请证书(域名需直接解析到服务器且 80 端口可访问);如果域名经 Cloudflare 代理且 SSL 模式为 Full,用 `--tls selfsigned`;
-- 生成访问密码并在最后打印出来。
+The script installs Node.js 22 and `@deepseek-ai/dsh`, creates the unprivileged user `dsh`, and configures the systemd service `dsh-web` (listening on `127.0.0.1:18790` only). With `--domain` it also:
 
-常用选项:`--password 新密码`(修改密码,同时让所有已登录设备退出)、`--workdir 目录`(dsh 的工作目录,默认 `/home/dsh/workspace`)、`--dsh-version 版本`。重复运行是安全的。
+- installs the password gateway `dsh-gateway` (`127.0.0.1:18800`) and an nginx site;
+- requests a Let's Encrypt certificate (the domain must resolve directly to the server and port 80 must be reachable); for a domain proxied by Cloudflare with SSL mode Full, use `--tls selfsigned`;
+- generates an access password and prints it at the end.
 
-脚本会把 root 的 `authorized_keys` 复制给 `dsh` 用户(`--no-copy-root-keys` 关闭),并只授予它重启这两个服务、读取它们日志和运行 `dsh-update` 的 sudo 权限。
+Common options: `--password NEW` (changes the password and logs out every device), `--workdir DIR` (dsh's working directory, default `/home/dsh/workspace`), `--dsh-version VERSION`. Re-running is safe.
 
-升级服务器上的 dsh:`dsh-update [版本]`(root),或以 `dsh` 用户运行 `sudo dsh-update [版本]`;版本只接受 npm 版本号或标签。
+The script copies root's `authorized_keys` to the `dsh` user (`--no-copy-root-keys` turns this off) and grants it sudo only to restart the two services, read their logs, and run `dsh-update`.
 
-运行自己修改过的 dsh:让 `~dsh/.dsh-remote/dsh-bin` 指向自建版本的 `apps/cli/lib/bin.js` 并重启 `dsh-web`,删除该链接即回到 npm 版本。在官方版本之上维护修改的一套做法(分支结构、同步、构建、部署脚本)见 DeepSeek Harness 源码中 `custom` 分支的 `.custom/README.md`。
+To upgrade dsh on the server, run `dsh-update [VERSION]` as root, or `sudo dsh-update [VERSION]` as the `dsh` user; it accepts only an npm version or dist-tag.
 
-域名经 Cloudflare 代理时,SSL 模式 Full 和 Flexible 都可以用(nginx 只信任 Cloudflare 官方 IP 段发来的 `X-Forwarded-Proto` 和 `CF-Connecting-IP`)。建议用 Full:Flexible 下 Cloudflare 到服务器这一段是明文 HTTP。
+To run DSH Pro or another self-built dsh, point `~dsh/.dsh-remote/dsh-bin` at its `apps/cli/lib/bin.js` and restart `dsh-web`; deleting the link returns to the npm release. [FORK.md](../FORK.md#deploy-to-a-server-and-use-it-remotely) lists the full commands for building DSH Pro on the server and switching to it.
 
-> dsh 能在服务器上执行任意命令。开放网页访问时请使用足够长的密码,并始终使用 HTTPS。网关对密码错误有限流(同一 IP 连续 5 次错误锁定 15 分钟)。
+For a domain proxied by Cloudflare, SSL modes Full and Flexible both work (nginx trusts `X-Forwarded-Proto` and `CF-Connecting-IP` only from Cloudflare's published IP ranges). Prefer Full: with Flexible, the hop from Cloudflare to the server is plain HTTP.
 
-手机浏览器“添加到主屏幕”时,系统取图标和 manifest 的请求不带登录 cookie,所以网关不需登录就放行 dsh 的这几个公开静态文件:`/manifest.webmanifest`、`/favicon.svg`、`/favicon-dark.svg` 和 `/icons/*.png`(仅 GET/HEAD)。其他请求仍需登录。
+> dsh can run any command on the server. When you open web access, use a long password and always use HTTPS. The gateway rate-limits wrong passwords (5 consecutive failures from one IP lock it out for 15 minutes).
 
-## 2. 安装 Mac 客户端
+When a phone browser adds the page to the home screen, its requests for the icons and manifest carry no login cookie, so the gateway serves these public dsh static files without a login: `/manifest.webmanifest`, `/favicon.svg`, `/favicon-dark.svg`, and `/icons/*.png` (GET/HEAD only). Every other request still needs a login.
 
-从 [Releases](https://github.com/JoshuaNibaba/dsh-remote-mac/releases/latest) 下载 `DSH-Remote.zip`,解压后把 `DSH Remote.app` 拖到「应用程序」。应用没有经过 Apple 公证,第一次打开时请右键点击应用并选择「打开」。也可以用命令行安装(不会触发该提示):
+## 2. Install the Mac client
+
+Download `DSH-Remote.zip` from the DSH Pro [release `dsh-remote`](https://github.com/JoshuaNibaba/dsh-pro/releases/tag/dsh-remote), unzip it, and drag `DSH Remote.app` into Applications. The app is not notarized by Apple, so the first time, right-click it and choose Open. Installing from the command line avoids that prompt:
 
 ```sh
-curl -fsSL https://github.com/JoshuaNibaba/dsh-remote-mac/releases/latest/download/DSH-Remote.zip -o /tmp/DSH-Remote.zip
+curl -fsSL https://github.com/JoshuaNibaba/dsh-pro/releases/download/dsh-remote/DSH-Remote.zip -o /tmp/DSH-Remote.zip
 ditto -x -k /tmp/DSH-Remote.zip ~/Applications
 ```
 
-首次启动会打开设置窗口(之后在菜单 **DSH Remote → 设置…**,⌘,):
+The first launch opens the settings window (later: menu **DSH Remote → 设置…**, ⌘,):
 
-| 项目 | 说明 |
+| Setting | Meaning |
 |---|---|
-| 网页地址 | 安装时 `--domain` 对应的地址,例如 `https://dsh.example.com` |
-| 访问密码 | 首次登录或密码修改后填写。只用于这一次登录，不会保存;登录状态保持一年 |
-| SSH 服务器 | 可选,服务器 IP(也可以是 `~/.ssh/config` 里的别名)。域名经 Cloudflare 代理时要填 IP |
-| SSH 端口 / 用户 | 留空为 22;用户建议 `dsh` |
-| 优先使用 SSH 隧道 | 默认关闭 |
+| 网页地址 (web address) | The address for `--domain` at install time, for example `https://dsh.example.com` |
+| 访问密码 (access password) | Enter it on first login or after a password change. It is used for that login only and not stored; the login lasts one year |
+| SSH 服务器 (SSH server) | Optional: the server IP (or an alias from `~/.ssh/config`). Use the IP when the domain is proxied by Cloudflare |
+| SSH 端口 / 用户 (SSH port / user) | Empty means 22; the recommended user is `dsh` |
+| 优先使用 SSH 隧道 (prefer SSH tunnel) | Off by default |
 
-**推荐只填网页地址和访问密码**:不需要配置 SSH key,和浏览器、手机的登录方式一样。填了 SSH 服务器时,「查看日志」「重启服务」「在终端中登录服务器」使用 SSH;网页地址打不开时也会自动改用 SSH 隧道。勾选「优先使用 SSH 隧道」则反过来，网页地址作为备用。网页地址和 SSH 服务器至少填一项。
+**Entering only the web address and access password is recommended**: it needs no SSH key and logs in the same way as browsers and phones. With an SSH server filled in, 查看日志 (view logs), 重启服务 (restart service), and 在终端中登录服务器 (log in from Terminal) use SSH, and the client falls back to an SSH tunnel when the web address does not open. Prefer SSH tunnel reverses that, keeping the web address as the fallback. Fill in at least one of the web address and the SSH server.
 
-两种连接方式都使用 DSH 的外观设置。选择「跟随系统」时，页面和窗口跟随 macOS 的外观；选择浅色或深色时，窗口使用对应的固定外观。
+Both connection modes follow the DSH appearance setting. With 跟随系统 (follow system), the page and window follow the macOS appearance; with light or dark, the window uses that fixed appearance.
 
-两种方式的差别:
+How the two modes differ:
 
-| | 网页地址 + 密码 | SSH 隧道 |
+| | Web address + password | SSH tunnel |
 |---|---|---|
-| 配置 | 只要密码 | 需要本机 SSH key 被服务器信任 |
-| 延迟 | 多经过一层 CDN / nginx / 网关；网关本身不到 1 ms,CDN 的影响取决于本机到最近节点的线路 | 直连服务器 |
-| 功能 | 完整(实时消息走 WebSocket,dsh 每 2 秒发心跳，不会被 CDN 的空闲超时断开) | 完整 |
-| 上传 | 经 Cloudflare 免费版时单个请求最大 100 MB | 不限 |
-| 服务菜单 | 需要另外填 SSH 服务器 | 可用 |
+| Setup | Password only | This Mac's SSH key must be trusted by the server |
+| Latency | One more hop through the CDN, nginx, and gateway; the gateway itself adds under 1 ms, and the CDN's effect depends on the route to the nearest edge | Direct to the server |
+| Features | Complete (live messages use a WebSocket; `server/web.patch.yml` makes dsh send a heartbeat every 15 seconds, so CDN idle timeouts do not cut it) | Complete |
+| Uploads | At most 100 MB per request through Cloudflare's free plan | Unlimited |
+| Service menu | Needs the SSH server as well | Available |
 
-让服务器信任本机的 SSH key(只在使用 SSH 时需要):
-
-```sh
-ssh-keygen -t ed25519                      # 本机还没有 key 时
-ssh-copy-id -p <SSH 端口> dsh@<服务器>      # 或把 ~/.ssh/id_ed25519.pub 追加到服务器的 /home/dsh/.ssh/authorized_keys
-```
-
-应用默认每 6 小时检查一次新版本(菜单 **DSH Remote → 检查更新…** 可手动检查),确认后自动下载、替换并重启。菜单「服务」里可以重新连接、在浏览器中打开、在终端中登录服务器、查看日志、重启服务和退出网页登录。运行日志在 `~/Library/Logs/DSHRemote.log`(token 已隐藏)。
-
-Mac 客户端的 SSH 隧道会自动恢复,不需要安装 `autossh`:每 10 秒发送一次 SSH 心跳,连续 3 次无响应后断开;断开后按 1、2、4、8 秒的间隔重试,之后每 10 秒重试一次。已打开的 dsh 页面在断线期间保持显示,由页面自带的「正在重连」提示表示状态;隧道在原本地端口恢复后,客户端通知页面立即重连,不重新加载页面、也不读取访问地址。断线持续 60 秒仍未恢复时,才换成显示 SSH 错误和倒计时的状态页。加载页面时先使用 WebKit 保存的 dsh 登录 cookie(有效期 30 天,dsh 重启后仍有效);只有服务返回 401 时,才通过 SSH 读取访问地址换取新 cookie。读取访问地址时只建立一次 SSH 连接,通过该隧道的专属控制套接字复用认证,不会再进行第二次握手。每次新隧道使用新的私有套接字,停止时删除,避免复用失效的旧连接。macOS 报告网络恢复或从睡眠唤醒时,客户端会取消未完成的请求并重建旧隧道,即使旧 SSH 进程仍在运行;手动重新连接和保存设置也会取消旧请求,并重新加载页面。地址读取单条命令最多等待 10 秒,等待服务发布地址的总时限为 15 秒;其他服务菜单的 SSH 命令最多等待 30 秒。切换到网页连接或退出应用会取消重试。首次 SSH 连接失败且配置了备用网页地址时,仍会改用网页连接。此自动恢复由 Mac 应用管理,不适用于命令行工具单独创建的隧道。
-
-排查连接慢:菜单 **服务 → 打开客户端日志** 可查看本机连接记录。日志分别记录连接服务器 IP、TCP 建连、SSH 服务端版本响应、认证完成、隧道就绪、读取访问地址、页面响应和页面加载完成的耗时;`tunnel exited:` 行记录每次断线时 SSH 报告的原因,例如 `Timeout, server <服务器> not responding.` 表示心跳超时,`Connection reset by peer` 表示连接被网络中途重置。界面也会区分「正在建立 SSH 隧道」「正在读取服务器访问地址」和「正在加载 dsh 页面」;最后一步的耗时主要取决于下载 dsh 前端代码,dsh 更新前端后的第一次加载约需下载 6 MB。断线记录同时给出 ssh 的退出码或结束它的信号。Ping 只反映 ICMP 往返时间;它正常时,SSH 握手、密钥认证或远程 shell 启动仍可能等待。访问地址输出中的独立 shell 提示行会被忽略,日志中的 token 会隐藏。
-
-## 3. 浏览器和手机
-
-打开安装时的网页地址,输入访问密码即可。登录状态在该设备上保持一年(使用期间自动续期)。退出登录:访问 `/__dsh/logout`。
-
-## 开发
+Make the server trust this Mac's SSH key (needed only for SSH):
 
 ```sh
-./mac/build.sh               # 本地编译并安装到 ~/Applications(只能在 macOS 上)
-./mac/build.sh --no-install  # 只打包 mac/build/DSH-Remote.zip
+ssh-keygen -t ed25519                      # when this Mac has no key yet
+ssh-copy-id -p <ssh-port> dsh@<server>     # or append ~/.ssh/id_ed25519.pub to /home/dsh/.ssh/authorized_keys on the server
 ```
 
-每次推送到 `main` 且修改了 `mac/` 时,GitHub Actions 在 macOS 上编译并发布 release `v1.0.<构建号>`,客户端的自动更新读取最新 release。Fork 本仓库后,构建出的客户端会从你自己的仓库检查更新;服务端安装脚本可用环境变量 `DSH_REMOTE_REPO=<owner>/<repo>` 指定下载来源。
+The app checks for a new version every 6 hours (menu **DSH Remote → 检查更新…** checks now); after you confirm, it downloads, replaces, and relaunches itself. The 服务 (Service) menu reconnects, opens the page in a browser, logs in to the server from Terminal, shows logs, restarts the service, and logs out of the web login. The app log is `~/Library/Logs/DSHRemote.log` (tokens hidden).
 
-macOS CI 除了重试与进程生命周期测试,还启动仅监听回环地址的临时 `sshd`,使用临时密钥验证首次连接和重连各只认证一次,并覆盖命令总超时、执行中取消、双输出流大于管道容量及带 shell 提示的登录地址解析。
+The Mac client's SSH tunnel recovers by itself without `autossh`: it sends an SSH keepalive every 10 seconds and disconnects after 3 unanswered ones, then retries after 1, 2, 4, and 8 seconds and every 10 seconds after that. An open dsh page stays on screen while disconnected, showing the page's own reconnecting notice; once the tunnel is back on the same local port, the client tells the page to reconnect at once, without reloading the page or reading the access address. Only after 60 seconds without recovery does a status page with the SSH error and a countdown replace it. Loading the page first uses the dsh login cookie stored by WebKit (valid for 30 days and across dsh restarts); only when the service answers 401 does the client read the access address over SSH for a new cookie. Reading the access address opens one SSH connection and reuses its authentication through the tunnel's own control socket, with no second handshake. Every new tunnel uses a new private socket that is deleted when it stops, so a stale connection is never reused. When macOS reports that the network came back or the Mac woke from sleep, the client cancels pending requests and rebuilds the tunnel even if the old SSH process is still running; reconnecting manually and saving settings also cancel old requests and reload the page. A single address-reading command waits at most 10 seconds and waiting for the service to publish its address at most 15 seconds in total; other service-menu SSH commands wait at most 30 seconds. Switching to the web connection or quitting the app cancels retries. If the first SSH connection fails and a fallback web address is configured, the client still switches to it. This recovery belongs to the Mac app and does not apply to tunnels the CLI creates on its own.
 
-命令行工具:`ln -s "$PWD/cli/dsh-remote" ~/.local/bin/dsh-remote`,它读取 Mac 客户端的设置(包括本地端口，默认 18791),`dsh-remote help` 查看用法。只配置了网页地址时,`dsh-remote open` 在浏览器中打开网页地址。
+Troubleshooting a slow connection: menu **服务 → 打开客户端日志** (open client log) shows the local connection records. The log records the time for resolving the server IP, the TCP connection, the SSH server version reply, authentication, tunnel readiness, reading the access address, the page response, and the page load; `tunnel exited:` lines record the reason SSH reported for each disconnect, for example `Timeout, server <server> not responding.` for a keepalive timeout and `Connection reset by peer` for a connection reset by the network. The UI also distinguishes setting up the SSH tunnel, reading the server's access address, and loading the dsh page; the last step mostly depends on downloading the dsh frontend, about 6 MB on the first load after a dsh frontend update. Disconnect records also give ssh's exit code or the signal that ended it. Ping reflects only the ICMP round trip; when it looks fine, the SSH handshake, key authentication, or remote shell startup may still be waiting. Standalone shell prompt lines in the access address output are ignored, and tokens in the log are hidden.
+
+## 3. Browsers and phones
+
+Open the web address from the installation and enter the access password. The login lasts one year on that device (renewed while in use). To log out, visit `/__dsh/logout`.
+
+## Development
+
+Run these commands from the root of the DSH Pro repository:
+
+```sh
+./remote/mac/build.sh               # build and install into ~/Applications (macOS only)
+./remote/mac/build.sh --no-install  # only package remote/mac/build/DSH-Remote.zip
+```
+
+On every push to `custom` that changes `remote/mac/`, GitHub Actions ([`.github/workflows/dsh-remote-mac.yml`](../.github/workflows/dsh-remote-mac.yml)) builds on macOS and updates the fixed release `dsh-remote`: it replaces `DSH-Remote.zip` and `DSH-Remote.version`, which records the build number, and moves the tag to the built commit. That release is never marked Latest and does not affect DSH Pro's own `custom-v*` releases. The client's updater reads `DSH-Remote.version` and offers an update when the build number exceeds its own. In a fork, the built client checks for updates in your own repository.
+
+Besides retry and process-lifecycle tests, macOS CI starts a temporary loopback-only `sshd` with temporary keys to verify that the first connection and a reconnection each authenticate once, and covers the overall command timeout, cancellation while running, both output streams exceeding the pipe capacity, and parsing the login address next to a shell prompt.
+
+CLI: `ln -s "$PWD/remote/cli/dsh-remote" ~/.local/bin/dsh-remote`. It reads the Mac client's settings (including the local port, default 18791); `dsh-remote help` shows usage. With only a web address configured, `dsh-remote open` opens it in the browser.

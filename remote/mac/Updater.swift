@@ -1,6 +1,7 @@
-// In-app updates from the GitHub releases of the repository named by the
-// DSHRemoteUpdateRepo Info.plist key (set at build time). Releases are tagged
-// v1.0.<build>; a release is newer when its build number exceeds CFBundleVersion.
+// In-app updates from the rolling GitHub release `dsh-remote` of the repository
+// named by the DSHRemoteUpdateRepo Info.plist key (set at build time). The release
+// carries DSH-Remote.zip and DSH-Remote.version, whose content is the build number;
+// a release is newer when that number exceeds CFBundleVersion.
 
 import AppKit
 
@@ -29,29 +30,28 @@ enum Updater {
         NSError(domain: "update", code: 1, userInfo: [NSLocalizedDescriptionKey: msg])
     }
 
-    /// Fetches the latest release; completes on the main queue. Uses the
-    /// github.com/<repo>/releases/latest redirect to the newest tag rather than
-    /// the REST API, whose anonymous limit is shared by everyone behind one IP.
+    /// The release tag that .github/workflows/dsh-remote-mac.yml publishes to.
+    static let releaseTag = "dsh-remote"
+
+    /// Fetches the latest release; completes on the main queue. Reads the release's
+    /// DSH-Remote.version asset through github.com rather than the REST API, whose
+    /// anonymous limit is shared by everyone behind one IP.
     static func latest(_ done: @escaping (Result<Release, Error>) -> Void) {
         guard let repo else { return done(.failure(fail("此版本未配置更新源(DSHRemoteUpdateRepo)"))) }
-        var req = URLRequest(url: URL(string: "https://github.com/\(repo)/releases/latest")!)
-        req.httpMethod = "HEAD"
+        let base = "https://github.com/\(repo)/releases/download/\(releaseTag)"
+        var req = URLRequest(url: URL(string: "\(base)/DSH-Remote.version")!)
         req.cachePolicy = .reloadIgnoringLocalCacheData
         req.setValue("DSH-Remote/\(currentBuild)", forHTTPHeaderField: "User-Agent")
-        URLSession.shared.dataTask(with: req) { _, resp, err in
+        URLSession.shared.dataTask(with: req) { data, resp, err in
             let result: Result<Release, Error> = Result {
                 if let err { throw err }
-                guard let http = resp as? HTTPURLResponse, http.statusCode == 200, let final = http.url,
-                      final.path.contains("/releases/tag/") else {
+                guard let http = resp as? HTTPURLResponse, http.statusCode == 200, let data else {
                     throw fail("无法读取 \(repo) 的最新版本(HTTP \((resp as? HTTPURLResponse)?.statusCode ?? 0))")
                 }
-                let tag = final.lastPathComponent
-                guard tag.hasPrefix("v"), let build = Int(tag.split(separator: ".").last ?? "") else {
-                    throw fail("无法识别的版本标签 \(tag)")
-                }
-                let zip = URL(string: "https://github.com/\(repo)/releases/download/\(tag)/DSH-Remote.zip")!
-                return Release(build: build, version: String(tag.dropFirst()), zip: zip,
-                               notes: "https://github.com/\(repo)/releases/tag/\(tag)")
+                let text = String(decoding: data, as: UTF8.self).trimmed
+                guard let build = Int(text) else { throw fail("无法识别的版本号 \(text)") }
+                return Release(build: build, version: "1.0.\(build)", zip: URL(string: "\(base)/DSH-Remote.zip")!,
+                               notes: "https://github.com/\(repo)/releases/tag/\(releaseTag)")
             }
             DispatchQueue.main.async { done(result) }
         }.resume()

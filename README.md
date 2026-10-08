@@ -2,7 +2,7 @@
 
 English | [中文](README.zh.md)
 
-> This is the **DSH Pro** branch, an unofficial distribution built on DeepSeek Harness that DeepSeek neither develops nor endorses. See [FORK.md](FORK.md) for its changes, installation, and compatibility. The official README follows.
+> This is the **DSH Pro** branch, an unofficial distribution built on DeepSeek Harness that DeepSeek neither develops nor endorses. It adds a Kanban task board, a server status footer, a phone layout, workspace file downloads, and model-native web search, and ships **DSH Remote** ([`remote/`](remote/README.md)): a server installer plus a Mac client for using dsh on your own server. **[FORK.md](FORK.md) covers installation, server deployment, every change with screenshots, and compatibility.** The Mac client is in [release `dsh-remote`](https://github.com/JoshuaNibaba/dsh-pro/releases/tag/dsh-remote). The official README follows.
 
 DeepSeek Harness (`dsh`) is an open-source agent harness developed by [DeepSeek AI](https://deepseek.com).
 

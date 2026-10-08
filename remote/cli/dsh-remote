@@ -16,7 +16,7 @@ REMOTE_PORT="${DSH_REMOTE_PORT:-$(pref remotePort)}"; REMOTE_PORT="${REMOTE_PORT
 # Same default as the app (18791), so a local `dsh web` on 18790 does not collide.
 LOCAL_PORT="${DSH_LOCAL_PORT:-$(pref localPort)}"; LOCAL_PORT="${LOCAL_PORT:-18791}"
 SERVICE="dsh-web"
-APP_REPO="${DSH_REMOTE_APP_REPO:-JoshuaNibaba/dsh-remote-mac}"
+APP_REPO="${DSH_REMOTE_APP_REPO:-JoshuaNibaba/dsh-pro}"
 APP_DIR="$HOME/Applications/DSH Remote.app"
 CTL="${TMPDIR:-/tmp}/dsh-remote-${LOCAL_PORT}.ctl"
 
@@ -55,7 +55,7 @@ local_url() {
 
 update_app() {
   local tmp; tmp="$(mktemp -d)"
-  curl -fsSL "https://github.com/$APP_REPO/releases/latest/download/DSH-Remote.zip" -o "$tmp/DSH-Remote.zip"
+  curl -fsSL "https://github.com/$APP_REPO/releases/download/dsh-remote/DSH-Remote.zip" -o "$tmp/DSH-Remote.zip"
   ditto -x -k "$tmp/DSH-Remote.zip" "$tmp"
   xattr -dr com.apple.quarantine "$tmp/DSH Remote.app" 2>/dev/null || true
   local was_running=0

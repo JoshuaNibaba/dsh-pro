@@ -1,0 +1,83 @@
+# Builds DSH Remote.app (remote/mac) on macOS for every custom push that touches it
+# and publishes it to the rolling GitHub release `dsh-remote`: DSH-Remote.zip plus
+# DSH-Remote.version (the build number), which the app's updater and
+# remote/cli/dsh-remote read. Build numbers continue the standalone repository's
+# v1.0.19, hence the offset.
+name: DSH Remote (Mac)
+
+on:
+  push:
+    branches: [custom]
+    paths: ['remote/mac/**', '.github/workflows/dsh-remote-mac.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: dsh-remote-mac
+  cancel-in-progress: false
+
+env:
+  RELEASE_TAG: dsh-remote
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build number
+        run: echo "BUILD_NUMBER=$(( ${{ github.run_number }} + 19 ))" >> "$GITHUB_ENV"
+
+      - name: Test theme integration
+        run: |
+          node --test remote/mac/tests/chrome.test.mjs
+          xcrun swiftc -swift-version 5 -framework AppKit -framework WebKit \
+            remote/mac/Chrome.swift remote/mac/tests/ChromeTests.swift -o "$RUNNER_TEMP/dsh-chrome-tests"
+          "$RUNNER_TEMP/dsh-chrome-tests"
+
+      - name: Test SSH recovery
+        run: |
+          cd remote/mac
+          if ! xcrun swiftc -swift-version 5 Settings.swift SSH.swift SSHCommand.swift SSHRecovery.swift \
+            tests/SSHRecoveryTests.swift -o "$RUNNER_TEMP/dsh-ssh-tests" 2> "$RUNNER_TEMP/dsh-ssh-compile.log"; then
+            while IFS= read -r line; do echo "::error::$line"; done < "$RUNNER_TEMP/dsh-ssh-compile.log"
+            exit 1
+          fi
+          if ! "$RUNNER_TEMP/dsh-ssh-tests" > "$RUNNER_TEMP/dsh-ssh-test.log" 2>&1; then
+            while IFS= read -r line; do echo "::error::$line"; done < "$RUNNER_TEMP/dsh-ssh-test.log"
+            exit 1
+          fi
+          cat "$RUNNER_TEMP/dsh-ssh-test.log"
+
+      - name: Build
+        env:
+          UPDATE_REPO: ${{ github.repository }}
+        run: |
+          if ! ./remote/mac/build.sh --no-install > "$RUNNER_TEMP/dsh-build.log" 2>&1; then
+            while IFS= read -r line; do echo "::error::$line"; done < "$RUNNER_TEMP/dsh-build.log"
+            exit 1
+          fi
+          cat "$RUNNER_TEMP/dsh-build.log"
+          echo "$BUILD_NUMBER" > remote/mac/build/DSH-Remote.version
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          short="$(git rev-parse --short HEAD)"
+          title="DSH Remote 1.0.$BUILD_NUMBER (Mac 客户端)"
+          notes="$(printf 'DSH Remote Mac 客户端 1.0.%s,构建自 %s:%s\n\n下载 DSH-Remote.zip,解压后把 DSH Remote.app 拖到「应用程序」。说明见 [remote/README.md](https://github.com/%s/blob/custom/remote/README.md)。' \
+            "$BUILD_NUMBER" "$short" "$(git log -1 --format=%s)" "$GITHUB_REPOSITORY")"
+          git tag -f "$RELEASE_TAG" "$GITHUB_SHA"
+          git push origin "+refs/tags/$RELEASE_TAG"
+          if gh release view "$RELEASE_TAG" > /dev/null 2>&1; then
+            # The zip goes first so a client that sees the new version always finds its zip.
+            gh release upload "$RELEASE_TAG" remote/mac/build/DSH-Remote.zip --clobber
+            gh release upload "$RELEASE_TAG" remote/mac/build/DSH-Remote.version --clobber
+            gh release edit "$RELEASE_TAG" --title "$title" --notes "$notes" --latest=false --prerelease=false
+          else
+            gh release create "$RELEASE_TAG" remote/mac/build/DSH-Remote.zip remote/mac/build/DSH-Remote.version \
+              --title "$title" --notes "$notes" --latest=false
+          fi

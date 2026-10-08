@@ -2,7 +2,7 @@
 
 [English](README.md) | 中文
 
-> 这是 **DSH Pro** 分支：基于 DeepSeek Harness 的非官方发行版，不由 DeepSeek 开发或认可。改动、安装和兼容性见 [FORK.md](FORK.md)(页首可切换中文)。下文是官方 README。
+> 这是 **DSH Pro** 分支：基于 DeepSeek Harness 的非官方发行版，不由 DeepSeek 开发或认可。它增加了任务看板、服务器状态栏、手机布局、工作区文件下载和模型原生网页搜索，并附带 **DSH Remote**([`remote/`](remote/README.zh.md)):服务端安装脚本和 Mac 客户端，用于在自己的服务器上远程使用 dsh。**安装、服务器部署、带截图的全部改进和兼容性见 [FORK.md](FORK.md)(页首可切换中文)。** Mac 客户端在 [Release `dsh-remote`](https://github.com/JoshuaNibaba/dsh-pro/releases/tag/dsh-remote)。下文是官方 README。
 
 DeepSeek Harness（`dsh`）是由 [DeepSeek AI](https://deepseek.com) 开发的开源 agent harness（智能体框架）。
 
