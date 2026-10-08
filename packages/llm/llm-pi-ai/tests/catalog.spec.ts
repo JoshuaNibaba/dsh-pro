@@ -1075,14 +1075,12 @@ describe('compat switches', () => {
     })).toThrow(/model "deepseek-flash" sets compat "requiresReasoningContentOnAssistantMessages" with no value/)
   })
 
-  it('serves the Responses compat type on every protocol pi-ai gives it to', () => {
-    // pi-ai types azure-openai-responses and openai-codex-responses with the
-    // same OpenAIResponsesCompat, so a switch settable on one is settable on all.
-    for (const route of ['azure-openai-responses', 'openai-codex']) {
-      const models = modelsOf({ [route]: { compat: { supportsDeveloperRole: false } } }, route)
-      const [first] = [...models.values()]
-      expect((first?.compat as { supportsDeveloperRole?: boolean }).supportsDeveloperRole).toBe(false)
-    }
+  it('serves the Responses compat type on the catalog Codex protocol', () => {
+    // pi-ai types openai-codex-responses with OpenAIResponsesCompat. Its Azure
+    // provider ships no catalog models, so no Azure route is servable here.
+    const models = modelsOf({ 'openai-codex': { compat: { supportsDeveloperRole: false } } }, 'openai-codex')
+    const [first] = [...models.values()]
+    expect((first?.compat as { supportsDeveloperRole?: boolean }).supportsDeveloperRole).toBe(false)
   })
 
   it('serves the Bedrock compat type on its own protocol', () => {

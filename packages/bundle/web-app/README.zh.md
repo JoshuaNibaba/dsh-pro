@@ -54,6 +54,7 @@ dsh --profile web --no-open --port 8080
 | `printUrl` | `true` | 启动时打印 `dsh web:` URL 行 |
 | `surfaceContext` | `true` | 给 agent 提供 GUI 定位上下文，并把 `DSH_WEB_URL` 暴露给其 shell 命令 |
 | `trustedHosts` | `[]` | 允许从网络访问 GUI 的额外主机 |
+| `sourceRoot` | 安装根目录 | `harness:source` 提示段落给出的 checkout 绝对路径；可设为稳定路径（例如指向当前发布版本的软链接），这样切换发布目录时系统提示词及其缓存前缀保持不变 |
 
 生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-web-app)是每个受支持字段及其 JSDoc 的穷尽式真源。 随发行版交付的组合不含 `time-context`、`schedule` 和 `ui-schedule` 行，可选实验性 bundle `@deepseek-ai/dsh-experimental-schedule-bundle` 可在插件管理页插入这三行。
 

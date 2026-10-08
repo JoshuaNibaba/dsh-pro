@@ -18,7 +18,7 @@ import * as AppBoot from '@deepseek-ai/dsh-app-boot'
 import { createLaunchEnvironmentSnapshot, DSH_LAUNCH_ENVIRONMENT_KEY } from '@deepseek-ai/dsh-launch-environment'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import type { WebServer } from '@deepseek-ai/dsh-host-webserver'
-import { apply, Config, internals } from '../src/index.ts'
+import { apply, Config, internals, resolveSourceRoot } from '../src/index.ts'
 
 vi.mock('node:child_process', async importOriginal => ({
   ...await importOriginal<typeof import('node:child_process')>(),
@@ -189,6 +189,27 @@ describe('web-app runtime glue', () => {
     expect(assembly.sections.find(entry => entry.name === 'app:web-surface')?.text)
       .toContain('rebuilding the affected Web artifacts')
     await ctx.fiber.dispose()
+  })
+
+  it('names a configured stable checkout path in the harness source section', async () => {
+    stageDist()
+    const ctx = new Context()
+    ctx.provide('webServer', fakeHttpServer().server)
+    provideConnection(ctx)
+    apply(ctx, new Config({
+      openBrowser: false, printUrl: false, surfaceContext: true, trustedHosts: [], sourceRoot: '/srv/dsh/current',
+    }))
+    await ctx.plugin(SystemPrompt, { personaPrefix: '' })
+    await new Promise(resolve => setTimeout(resolve, 0))
+    const assembly = await ctx.systemPrompt.assemble()
+    expect(assembly.sections.find(entry => entry.name === 'harness:source')?.text)
+      .toContain('implementation checkout is at /srv/dsh/current.')
+    await ctx.fiber.dispose()
+  })
+
+  it('refuses a relative source root', () => {
+    expect(() => resolveSourceRoot({ sourceRoot: 'releases/current' }))
+      .toThrow('web-app: sourceRoot must be an absolute path, got "releases/current"')
   })
 
   it('skips the surface context when disabled (the one-shot layer): no prompt section, no bash variables', async () => {

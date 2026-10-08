@@ -21,8 +21,8 @@
   en: 02fce53c21a33d74
   zh: 01110c4714dfd602
 /deepseek-ai-dsh-tools/use-this-package/configure-the-presentation-mode:
-  en: f843dfaf6ab6e19e
-  zh: 8e3b8816a4e51e7b
+  en: 3da753c788d6f964
+  zh: 8916c4a1564e0aef
 /deepseek-ai-dsh-tools/use-this-package/restrict-tools-per-agent:
   en: c6f98b2283cc2e47
   zh: c2cdce5d13473f15
@@ -68,6 +68,18 @@
 /deepseek-ai-dsh-tools/model-experience/normal-tool-schemas/kv-cache-effect:
   en: 7c5e75964e020b2c
   zh: d50d0402d15232d9
+/deepseek-ai-dsh-tools/model-experience/independent-call-batching:
+  en: bc72599427bd5d0e
+  zh: 5a9a9ce10148b62b
+/deepseek-ai-dsh-tools/model-experience/independent-call-batching/what-the-model-sees:
+  en: 0813dc49452f0bd0
+  zh: bd4c6a30f9b11e29
+/deepseek-ai-dsh-tools/model-experience/independent-call-batching/token-effect:
+  en: 61a2d6029a8a4780
+  zh: 8b58e92d55a1b5fb
+/deepseek-ai-dsh-tools/model-experience/independent-call-batching/kv-cache-effect:
+  en: 45c3e7c36692ec32
+  zh: 306ca8027d4efea3
 /deepseek-ai-dsh-tools/model-experience/ptc-mode-schema-and-system-prompt:
   en: eaefd7303f22977d
   zh: 9c425f9501128224

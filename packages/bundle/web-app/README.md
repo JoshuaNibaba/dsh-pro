@@ -54,6 +54,7 @@ Most users never set these; the command-line flags feed the four settings below 
 | `printUrl` | `true` | Print the `dsh web:` URL line at startup |
 | `surfaceContext` | `true` | Give the agent GUI-orientation context and expose `DSH_WEB_URL` to its shell commands |
 | `trustedHosts` | `[]` | Extra hosts allowed to reach the GUI from the network |
+| `sourceRoot` | installation root | Absolute checkout path the `harness:source` prompt section names; set a stable path, such as a symlink to the active release, so switching release directories keeps the system prompt and its cached prefix unchanged |
 
 The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-web-app) is the exhaustive source for every accepted field and its JSDoc. The shipped composition carries no `time-context`, `schedule`, or `ui-schedule` row; the optional experimental bundle `@deepseek-ai/dsh-experimental-schedule-bundle` inserts those three rows from the Plugins page.
 

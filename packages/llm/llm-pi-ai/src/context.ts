@@ -46,11 +46,10 @@ function toolResultOf(
   }
 }
 
-/** Reject unsupported roles, tool-change blocks, and image roles before replay or image offloading. */
+/** Reject misplaced tool-change blocks and image roles before replay or image offloading. */
 function assertSupportedHistory(messages: readonly RequestMessage[]): void {
   for (const message of messages) {
-    // Developer history is persisted for V4; provider serialization is intentionally deferred.
-    if (message.role === 'developer') throw new LlmError('Developer messages are not supported yet', 'UNSUPPORTED_CONTENT')
+    if (message.role === 'developer') continue
     if (message.content.some(block => block.type === 'tool-addition' || block.type === 'tool-removal')) {
       throw new LlmError('Tool-change blocks require developer role', 'UNSUPPORTED_CONTENT')
     }
@@ -126,18 +125,65 @@ async function prepareRequestImages(
   return versions
 }
 
-function toolsOf(options: GenerateOptions): PiTool[] | undefined {
-  // Deferred definitions are persisted for V4; provider loading is intentionally deferred.
-  if (options.tools?.some(tool => tool.deferLoading === true)) {
-    throw new LlmError('Deferred tool loading is not supported yet', 'UNSUPPORTED_CONTENT')
+/** Request tool declarations split into the leading tool set and every definition an addition may activate. */
+interface ToolDeclarations {
+  /** Declarations without `deferLoading`, available from the first message. */
+  readonly initial: readonly PiTool[]
+  /** Every declaration by name, including deferred ones. */
+  readonly byName: ReadonlyMap<string, PiTool>
+}
+
+function toolDeclarationsOf(options: GenerateOptions): ToolDeclarations {
+  const initial: PiTool[] = []
+  const byName = new Map<string, PiTool>()
+  for (const tool of options.tools ?? []) {
+    const declaration: PiTool = {
+      name: tool.name,
+      description: tool.description,
+      // ToolSchema.parameters is a JSON Schema object; pi-ai's TSchema
+      // (TypeBox) is structurally JSON Schema, so it assigns directly.
+      parameters: tool.parameters,
+    }
+    byName.set(tool.name, declaration)
+    // A deferred declaration becomes available only at a developer tool addition.
+    if (tool.deferLoading !== true) initial.push(declaration)
   }
-  return options.tools?.map(tool => ({
-    name: tool.name,
-    description: tool.description,
-    // ToolSchema.parameters is a JSON Schema object; pi-ai's TSchema
-    // (TypeBox) is structurally JSON Schema, so it assigns directly.
-    parameters: tool.parameters,
-  }))
+  return { initial, byName }
+}
+
+/**
+ * Translate one developer message into a pi-ai system message that changes the tool set at its position.
+ * pi-ai sends the change as native `tool_addition`/`tool_removal` blocks when the model supports them and
+ * otherwise folds the replayed tool set into the leading declarations.
+ */
+function toolChangeOf(message: Extract<RequestMessage, { role: 'developer' }>, declarations: ToolDeclarations): PiMessage {
+  const toolsAdded: PiTool[] = []
+  const toolsRemoved: { name: string }[] = []
+  for (const block of message.content) {
+    switch (block.type) {
+      case 'tool-addition': {
+        const tool = declarations.byName.get(block.toolName)
+        if (tool === undefined) {
+          throw new LlmError(`Tool addition names undeclared tool "${block.toolName}"`, 'UNSUPPORTED_CONTENT')
+        }
+        toolsAdded.push(tool)
+        break
+      }
+      case 'tool-removal':
+        toolsRemoved.push({ name: block.toolName })
+        break
+      // Merge-extensible content: a block pi-ai has no system-message form for is refused.
+      default:
+        throw new LlmError(`pi-ai cannot represent developer content ${block.type}`, 'UNSUPPORTED_CONTENT')
+    }
+  }
+  return {
+    role: 'system',
+    content: '',
+    ...toolsAdded.length === 0 ? {} : { toolsAdded },
+    ...toolsRemoved.length === 0 ? {} : { toolsRemoved },
+    timestamp: 0,
+  }
 }
 
 /** The request split into pi-ai's single `systemPrompt` slot and the history that converts to `messages`. */
@@ -164,12 +210,12 @@ function splitSystemPrompt(options: GenerateOptions): SystemPromptSplit {
 }
 
 /** Assemble the request-level pi-ai context envelope shared by both conversion paths. */
-function piContext(systemPrompt: string | undefined, options: GenerateOptions, messages: PiMessage[]): PiContext {
-  const tools = toolsOf(options)
+function piContext(systemPrompt: string | undefined, declarations: ToolDeclarations, messages: PiMessage[]): PiContext {
+  const tools = declarations.initial
   return {
     ...systemPrompt !== undefined ? { systemPrompt } : {},
     messages,
-    ...tools !== undefined && tools.length > 0 ? { tools } : {},
+    ...tools.length > 0 ? { tools: [...tools] } : {},
   }
 }
 
@@ -186,13 +232,18 @@ function appendAssistant(
   messages.push(assistant)
 }
 
-/** Append the system and assistant roles both context builders treat identically; true when consumed. */
-function appendSystemOrAssistant(
+/** Append the system, developer, and assistant roles both context builders treat identically; true when consumed. */
+function appendSharedRole(
   message: RequestMessage,
   messages: PiMessage[],
   toolNames: Map<ToolCallId, string>,
+  declarations: ToolDeclarations,
   onReplayDegrade?: (reason: string) => void,
 ): boolean {
+  if (message.role === 'developer') {
+    messages.push(toolChangeOf(message, declarations))
+    return true
+  }
   if (message.role === 'system') {
     // pi-ai has a single systemPrompt slot; a system message that did not
     // supply it folds into a user message to preserve order.
@@ -209,20 +260,21 @@ function appendSystemOrAssistant(
 function textOnlyContext(options: GenerateOptions, onReplayDegrade?: (reason: string) => void): PiContext {
   assertSupportedHistory(options.messages)
   const split = splitSystemPrompt(options)
+  const declarations = toolDeclarationsOf(options)
   const toolNames = new Map<ToolCallId, string>()
   const messages: PiMessage[] = []
   for (const message of split.messages) {
     if (contentHasImage(message.content)) {
       throw new LlmError('pi-ai image conversion requires the durable attachment service', 'UNSUPPORTED_CONTENT')
     }
-    if (appendSystemOrAssistant(message, messages, toolNames, onReplayDegrade)) continue
+    if (appendSharedRole(message, messages, toolNames, declarations, onReplayDegrade)) continue
     if (message.role === 'tool') {
       messages.push(toolResultOf(message, toolNames, flattenText(message)))
       continue
     }
     messages.push({ role: 'user', content: flattenText(message), timestamp: 0 })
   }
-  return piContext(split.systemPrompt, options, messages)
+  return piContext(split.systemPrompt, declarations, messages)
 }
 
 /** Inputs that bind deterministic request images to one current tool execution world. */
@@ -322,11 +374,12 @@ async function toPiContextWithImages(
     split.messages,
     ref => offloadedImageText(ref, resolveImageAccess(ref)),
   )
+  const declarations = toolDeclarationsOf(options)
   const toolNames = new Map<ToolCallId, string>()
   const messages: PiMessage[] = []
 
   for (const message of exactMessages) {
-    if (appendSystemOrAssistant(message, messages, toolNames, onReplayDegrade)) continue
+    if (appendSharedRole(message, messages, toolNames, declarations, onReplayDegrade)) continue
     if (message.role === 'tool') {
       messages.push(toolResultOf(message, toolNames, userContent(message.content, requestImages, resolveImageAccess)))
       continue
@@ -335,5 +388,5 @@ async function toPiContextWithImages(
     messages.push({ role: 'user', content, timestamp: 0 })
   }
 
-  return piContext(split.systemPrompt, options, messages)
+  return piContext(split.systemPrompt, declarations, messages)
 }

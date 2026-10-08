@@ -204,6 +204,20 @@ function reasoningInfo(
   }
 }
 
+/**
+ * The tool update mode for one model: `in-history` when pi-ai sends mid-conversation
+ * `tool_addition`/`tool_removal` blocks for it, which keeps the cached prefix across tool changes.
+ * @param model - the resolved model descriptor.
+ * @returns the `toolUpdate` field, or an empty object when tool changes must redeclare the tool list.
+ */
+function toolUpdateInfo(model: Model<Api>): Pick<LlmResolvedModelInfo, 'toolUpdate'> | Record<string, never> {
+  if (model.api !== 'anthropic-messages') return {}
+  const compat = (model as Model<'anthropic-messages'>).compat
+  return compat?.supportsMidConvoSystemMessages === true && compat.supportsMidConvoToolChanges === true
+    ? { toolUpdate: 'in-history' }
+    : {}
+}
+
 /** Merge deployment headers while removing case-insensitive attribution collisions. */
 function requestHeaders(headers: Readonly<Record<string, string>> | undefined): Record<string, string> {
   const attribution = attributionHeaders()
@@ -315,6 +329,7 @@ export class PiAiAdapter extends LlmAdapter {
       context: { contextWindow: resolvedModel.contextWindow },
       ...configuredMaxTokens === undefined ? {} : { defaultMaxTokens: configuredMaxTokens },
       ...reasoningInfo(resolvedModel, defaultLevel),
+      ...toolUpdateInfo(resolvedModel),
     }
   }
 

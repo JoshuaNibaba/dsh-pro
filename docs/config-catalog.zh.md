@@ -1904,6 +1904,11 @@ export interface PiAiCompatProfile {
   allowEmptySignature?: boolean
   /** Whether the endpoint accepts Anthropic strict tool schemas; `anthropic-messages`. */
   supportsStrictTools?: boolean
+  /**
+   * Whether the endpoint forwards mid-conversation `tool_addition`/`tool_removal` blocks and their
+   * `inline-tools` beta; `false` makes tool changes redeclare the tool list. `anthropic-messages`.
+   */
+  supportsMidConvoToolChanges?: boolean
 }
 
 /** One request modality a pi-ai model may accept. */
@@ -3375,7 +3380,7 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-system-prompt`
 
-- `source`: [`packages/core/system-prompt/src/index.ts:247`](../packages/core/system-prompt/src/index.ts)
+- `source`: [`packages/core/system-prompt/src/index.ts:248`](../packages/core/system-prompt/src/index.ts)
 
 ```ts config-catalog
 /** Plugin config: the deployment-authored fragment of the system prompt (see {@link Config.personaPrefix} for its contract). */
@@ -4066,7 +4071,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-tools`
 
 - `inject`: `systemPrompt`
-- `source`: [`packages/core/tools/src/index.ts:674`](../packages/core/tools/src/index.ts)
+- `source`: [`packages/core/tools/src/index.ts:676`](../packages/core/tools/src/index.ts)
 
 ```ts config-catalog
 /** Plugin config: how the registered tools are presented to the model. */
@@ -4090,6 +4095,12 @@ export interface Config {
    * restores strictly serial dispatch. Must be a positive integer.
    */
   maxParallelSubCalls?: number
+  /**
+   * Add the `tools:call-batching` prompt section, which asks the model to
+   * request independent tool calls in one response. Renders only for scopes
+   * presenting native tools. Default `false`.
+   */
+  batchIndependentCalls?: boolean
 }
 
 /** How the registry presents its tools to the model (see {@link Config.mode}). */
@@ -4194,6 +4205,13 @@ export interface Config {
   surfaceContext: boolean
   /** Explicit `--trusted-host` authorities from this invocation. */
   trustedHosts: string[]
+  /**
+   * Absolute Harness checkout path the `harness:source` prompt section names.
+   * Absent names this installation's root. A deployment that alternates
+   * between release directories sets a stable path, such as a symlink to the
+   * active release, so switching releases leaves the system prompt unchanged.
+   */
+  sourceRoot?: string
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-web-app -->

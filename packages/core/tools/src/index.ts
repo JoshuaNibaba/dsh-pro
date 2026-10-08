@@ -58,6 +58,8 @@ declare module '@deepseek-ai/dsh-llm' {
  */
 const PTC_ONLY_INSTRUCTION = `\`${RUN_CODE_NAME}\` is the only tool you can call directly — a tool call naming any other tool fails. Reach every tool the SDK declares below from inside the program.`
 
+const TOOL_CALL_BATCHING_INSTRUCTION = 'When you need several tool calls whose inputs do not depend on each other\'s results, request them together in one response instead of one call per response. Reads and web requests requested together run concurrently.'
+
 const SDK_RENDERERS: Record<string, (schemas: ToolSdkSchema[]) => string> = {
   typescript: renderToolsSdk,
   python: renderToolsSdkPy,
@@ -691,6 +693,12 @@ export interface Config {
    * restores strictly serial dispatch. Must be a positive integer.
    */
   maxParallelSubCalls?: number
+  /**
+   * Add the `tools:call-batching` prompt section, which asks the model to
+   * request independent tool calls in one response. Renders only for scopes
+   * presenting native tools. Default `false`.
+   */
+  batchIndependentCalls?: boolean
 }
 
 /**
@@ -810,6 +818,7 @@ export class ToolRuntime extends Service {
   static Config: z<Config> = z.object({
     mode: z.union(['native', 'ptc', 'both'] as const).default('native'),
     maxParallelSubCalls: z.natural().min(1).default(10),
+    batchIndependentCalls: z.boolean().default(false),
   })
 
   /** Internal staged view consumed by `dsh-agent-loop`'s parallel scheduler. */
@@ -852,9 +861,23 @@ export class ToolRuntime extends Service {
     this.defaultMode = config.mode ?? 'native'
     this.maxParallelSubCalls = resolveMaxParallelSubCalls(config.maxParallelSubCalls)
     ctx.systemPrompt.tools(context => this.wireSchemas(context.scope))
+    if (config.batchIndependentCalls === true) ctx.systemPrompt.section(this.batchingSection())
     if (this.defaultMode !== 'native') {
       ctx.systemPrompt.section(this.collapseSection())
       ctx.systemPrompt.section(this.sdkSection())
+    }
+  }
+
+  /**
+   * The independent-call batching request. It renders empty under an
+   * effective `ptc` mode, where only `run_code` is called directly.
+   * @returns the section registration.
+   */
+  private batchingSection(): PromptSection {
+    return {
+      name: 'tools:call-batching',
+      order: this.ctx.systemPrompt.getSectionOrder('TOOL_CALL_BATCHING'),
+      text: context => this.modeFor(context.scope) === 'ptc' ? '' : TOOL_CALL_BATCHING_INSTRUCTION,
     }
   }
 

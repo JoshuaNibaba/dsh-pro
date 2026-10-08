@@ -58,6 +58,7 @@ class FakeRuntime extends PtcRuntime {
 interface SetupOptions {
   mode?: Config['mode']
   maxParallelSubCalls?: number
+  batchIndependentCalls?: boolean
   runtime?: false | { language?: string }
   toolOrder?: string[]
 }
@@ -65,7 +66,11 @@ interface SetupOptions {
 async function setup(options: SetupOptions = {}) {
   const ctx = new Context()
   await ctx.plugin(SystemPrompt, { ...options.toolOrder ? { toolOrder: options.toolOrder } : {} })
-  await ctx.plugin(ToolRuntime, { mode: options.mode ?? 'ptc', ...options.maxParallelSubCalls !== undefined ? { maxParallelSubCalls: options.maxParallelSubCalls } : {} })
+  await ctx.plugin(ToolRuntime, {
+    mode: options.mode ?? 'ptc',
+    ...options.maxParallelSubCalls !== undefined ? { maxParallelSubCalls: options.maxParallelSubCalls } : {},
+    ...options.batchIndependentCalls !== undefined ? { batchIndependentCalls: options.batchIndependentCalls } : {},
+  })
   let runtime: FakeRuntime | undefined
   if (options.runtime !== false) {
     await ctx.plugin(FakeRuntime, options.runtime ?? {})
@@ -201,6 +206,21 @@ describe('mode-aware wire contribution', () => {
     // The rule is worthless after the guidance it qualifies.
     expect(names.indexOf('tools:ptc-only')).toBeLessThan(names.indexOf('tool:echo'))
     expect(names.indexOf('tools:ptc-only')).toBeLessThan(names.indexOf('tools:sdk'))
+  })
+
+  it("mode 'ptc' omits the call-batching request, which addresses native calls", async () => {
+    const { ctx, systemPrompt } = await setup({ mode: 'ptc', batchIndependentCalls: true })
+    registerEcho(ctx)
+    const assembly = await systemPrompt.assemble()
+    expect(assembly.sections.find(section => section.name === 'tools:call-batching')?.text).toBe('')
+  })
+
+  it("mode 'both' keeps the call-batching request because native calls execute there", async () => {
+    const { ctx, systemPrompt } = await setup({ mode: 'both', batchIndependentCalls: true })
+    registerEcho(ctx)
+    const assembly = await systemPrompt.assemble()
+    expect(assembly.sections.find(section => section.name === 'tools:call-batching')?.text)
+      .toContain('request them together in one response')
   })
 
   it("mode 'both' omits the run_code-only rule, because native calls do execute there", async () => {

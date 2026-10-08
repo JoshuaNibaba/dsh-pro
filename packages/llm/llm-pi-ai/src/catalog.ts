@@ -285,7 +285,7 @@ const ANTHROPIC_COMPAT_GATE = {
   sendSessionAffinityHeaders: 'withhold',
   sessionAffinityFormat: 'withhold',
   supportsMidConvoSystemMessages: 'withhold',
-  supportsMidConvoToolChanges: 'withhold',
+  supportsMidConvoToolChanges: 'offer',
   supportsMidConvoEffort: 'withhold',
   allowedFallbackModels: 'withhold',
 } as const satisfies Record<keyof AnthropicMessagesCompat, CompatDisposition>
@@ -441,6 +441,11 @@ export interface PiAiCompatProfile {
   allowEmptySignature?: boolean
   /** Whether the endpoint accepts Anthropic strict tool schemas; `anthropic-messages`. */
   supportsStrictTools?: boolean
+  /**
+   * Whether the endpoint forwards mid-conversation `tool_addition`/`tool_removal` blocks and their
+   * `inline-tools` beta; `false` makes tool changes redeclare the tool list. `anthropic-messages`.
+   */
+  supportsMidConvoToolChanges?: boolean
 }
 
 /** Compile-time constraint that `T` is `never`. */

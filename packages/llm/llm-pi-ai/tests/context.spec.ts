@@ -91,9 +91,44 @@ describe('pi-ai request context conversion', () => {
     }
   })
 
-  it('rejects deferred tool definitions until provider loading is implemented', () => {
-    expect(() => toPiContext({ ...request([]), tools: [{ name: 'search', description: '', parameters: {}, deferLoading: true }] }))
-      .toThrow(expect.objectContaining({ code: 'UNSUPPORTED_CONTENT' }))
+  it('declares deferred tools only at the developer messages that change the tool set', async () => {
+    const search = { name: 'search', description: 'search', parameters: { type: 'object' } }
+    const options: GenerateOptions = {
+      ...request([
+        user([{ type: 'text', text: 'first' }]),
+        createDeveloperMessage({
+          content: [{ type: 'tool-addition', toolName: 'search' }, { type: 'tool-removal', toolName: 'lookup' }],
+          source: { kind: 'test' },
+        }),
+        user([{ type: 'text', text: 'second' }]),
+      ]),
+      tools: [
+        { name: 'lookup', description: 'look up', parameters: { type: 'object' } },
+        { ...search, deferLoading: true },
+      ],
+    }
+    const expected = {
+      systemPrompt: 'system prompt',
+      tools: [{ name: 'lookup', description: 'look up', parameters: { type: 'object' } }],
+      messages: [
+        { role: 'user', content: 'first', timestamp: 0 },
+        { role: 'system', content: '', toolsAdded: [search], toolsRemoved: [{ name: 'lookup' }], timestamp: 0 },
+        { role: 'user', content: 'second', timestamp: 0 },
+      ],
+    }
+    expect(toPiContext(options)).toEqual(expected)
+    expect(await toPiContext(options, imageContext(attachments))).toEqual(expected)
+  })
+
+  it('converts a removal-only tool change without an addition list', () => {
+    const removal = createDeveloperMessage({ content: [{ type: 'tool-removal', toolName: 'lookup' }], source: { kind: 'test' } })
+    expect(toPiContext(request([removal])).messages)
+      .toEqual([{ role: 'system', content: '', toolsRemoved: [{ name: 'lookup' }], timestamp: 0 }])
+  })
+
+  it('omits the leading tool set when every declaration is deferred', () => {
+    expect(toPiContext({ ...request([]), tools: [{ name: 'search', description: '', parameters: {}, deferLoading: true }] }))
+      .toEqual({ systemPrompt: 'system prompt', messages: [] })
   })
 
   it('preserves the exact context for request-only input after durable tool history', async () => {
@@ -114,13 +149,17 @@ describe('pi-ai request context conversion', () => {
     expect(withImage).not.toHaveProperty('source')
   })
 
-  it('rejects developer history before reading image attachments', async () => {
-    const read = vi.fn((value: ImageAttachmentRef) => Promise.resolve(requestImage(value, Uint8Array.of(1))))
+  it('rejects a tool addition naming no declared tool', async () => {
     const message = createDeveloperMessage({ content: [{ type: 'tool-addition', toolName: 'search' }], source: { kind: 'test' } })
-    const failure = { code: 'UNSUPPORTED_CONTENT', message: 'Developer messages are not supported yet' }
+    const failure = { code: 'UNSUPPORTED_CONTENT', message: 'Tool addition names undeclared tool "search"' }
     expect(() => toPiContext(request([message]))).toThrow(expect.objectContaining(failure))
-    await expect(toPiContext(request([message]), imageContext(projectionStore(read)))).rejects.toMatchObject(failure)
-    expect(read).not.toHaveBeenCalled()
+    await expect(toPiContext(request([message]), imageContext(attachments))).rejects.toMatchObject(failure)
+  })
+
+  it('rejects developer content without a tool-change form', () => {
+    const message = createDeveloperMessage({ content: [{ type: 'text', text: 'note' }], source: { kind: 'test' } })
+    expect(() => toPiContext(request([message])))
+      .toThrow(expect.objectContaining({ code: 'UNSUPPORTED_CONTENT', message: 'pi-ai cannot represent developer content text' }))
   })
 
   it('omits absent and empty request-level optional fields', () => {

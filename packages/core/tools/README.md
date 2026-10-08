@@ -73,6 +73,7 @@ The `mode` config decides what the model sees: `native` (every visible schema), 
 |---|---|---|
 | `mode` | `native` | How visible tools are presented to the model: `native`, `ptc`, or `both` |
 | `maxParallelSubCalls` | `10` | Concurrency cap for a `run_code` program's overlapping sub-calls; `1` restores strictly serial dispatch |
+| `batchIndependentCalls` | `false` | Add the `tools:call-batching` prompt section asking the model to request independent tool calls in one response; renders empty under `ptc` |
 
 The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-tools) is the exhaustive source for every accepted field. Non-native modes require a composed `ctx.ptcRuntime` whose language has a registered SDK renderer; an agent preset selects its own presentation with [`dsh-agent-tool-presentation`](../agent-tool-presentation/README.md), and one agent can shadow the default with `presentAs(mode)`.
 
@@ -171,6 +172,20 @@ Fixed per-request cost proportional to the visible definitions. Restrictions tha
 #### KV Cache effect
 
 Prefix-stable while visible definitions and their order are unchanged. Registration, disposal, or scoped restriction may invalidate reuse from the first changed schema token.
+
+### Independent call batching
+
+#### What the model sees
+
+When `batchIndependentCalls` is true, a scope presenting native tools receives the `tools:call-batching` section at first-party order 850: "When you need several tool calls whose inputs do not depend on each other's results, request them together in one response instead of one call per response. Reads and web requests requested together run concurrently."
+
+#### Token effect
+
+About 40 fixed tokens per request while enabled.
+
+#### KV Cache effect
+
+Prefix-stable; enabling or disabling the option changes the system prompt from that section onward.
 
 ### PTC mode schema and system prompt
 

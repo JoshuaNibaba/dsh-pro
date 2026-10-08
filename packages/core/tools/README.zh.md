@@ -73,6 +73,7 @@ ctx.tools.register(defineTool({
 |---|---|---|
 | `mode` | `native` | 可见工具向模型呈现的方式：`native`、`ptc` 或 `both` |
 | `maxParallelSubCalls` | `10` | `run_code` 程序重叠子调用的并发上限；`1` 恢复严格串行分发 |
+| `batchIndependentCalls` | `false` | 添加 `tools:call-batching` 提示段落，要求模型在一次回复中请求相互独立的工具调用；在 `ptc` 下渲染为空 |
 
 生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-tools)是每个受支持字段的穷尽式真源。非原生模式要求已组合的 `ctx.ptcRuntime` 且其语言有已注册的 SDK 渲染器；agent preset 通过 [`dsh-agent-tool-presentation`](../agent-tool-presentation/README.zh.md) 自行选择呈现方式，单个 agent 可用 `presentAs(mode)` 遮蔽默认值。
 
@@ -171,6 +172,20 @@ ctx.tools.register(defineTool({
 #### KV Cache 影响
 
 只要可见定义及其顺序不变，前缀就保持稳定。注册、dispose 或作用域限制可能从第一个改变的 schema token 起使复用失效。
+
+### 独立调用合并
+
+#### 模型看到什么
+
+当 `batchIndependentCalls` 为 true 时，以原生方式呈现工具的作用域会在 first-party 顺序 850 处收到 `tools:call-batching` 段落："When you need several tool calls whose inputs do not depend on each other's results, request them together in one response instead of one call per response. Reads and web requests requested together run concurrently."
+
+#### Token 影响
+
+启用期间每次请求固定增加约 40 个 token。
+
+#### KV Cache 影响
+
+前缀稳定；启用或关闭该选项会改变系统提示词中从该段落开始的部分。
 
 ### PTC mode schema 与系统提示词
 

@@ -13,7 +13,7 @@
 
 import { spawn, type ChildProcess } from 'node:child_process'
 import { createRequire } from 'node:module'
-import { dirname, join } from 'node:path'
+import { dirname, isAbsolute, join } from 'node:path'
 import { networkInterfaces } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import type { Context } from '@deepseek-ai/cordis'
@@ -55,6 +55,13 @@ export interface Config {
   surfaceContext: boolean
   /** Explicit `--trusted-host` authorities from this invocation. */
   trustedHosts: string[]
+  /**
+   * Absolute Harness checkout path the `harness:source` prompt section names.
+   * Absent names this installation's root. A deployment that alternates
+   * between release directories sets a stable path, such as a symlink to the
+   * active release, so switching releases leaves the system prompt unchanged.
+   */
+  sourceRoot?: string
 }
 
 export const Config: z<Config> = z.object({
@@ -62,7 +69,22 @@ export const Config: z<Config> = z.object({
   printUrl: z.boolean().default(true),
   surfaceContext: z.boolean().default(true),
   trustedHosts: z.array(String).default([]),
+  sourceRoot: z.string(),
 })
+
+/**
+ * Resolve the checkout path the `harness:source` section names.
+ * @param config - validated {@link Config}.
+ * @returns the configured absolute path, or this installation's root when none is configured.
+ * @throws {Error} When `sourceRoot` is configured as a relative path.
+ */
+export function resolveSourceRoot(config: Pick<Config, 'sourceRoot'>): string {
+  if (config.sourceRoot === undefined) return SOURCE_ROOT
+  if (!isAbsolute(config.sourceRoot)) {
+    throw new Error(`web-app: sourceRoot must be an absolute path, got "${config.sourceRoot}"`)
+  }
+  return config.sourceRoot
+}
 
 /** Bind-dependent Web values shared by the trust fence and URL display. */
 export interface WebRuntimeValues {
@@ -223,6 +245,7 @@ export const internals: {
  * @param config - validated {@link Config}.
  */
 export function apply(ctx: Context, config: Config): void {
+  const sourceRoot = resolveSourceRoot(config)
   const runtime = resolveLanTrust(ctx.webServer.host, config.trustedHosts)
   // The loopback URL belongs to this host. Under SSH, the operator reaches it
   // through a local forwarding address that this process cannot derive.
@@ -234,7 +257,7 @@ export function apply(ctx: Context, config: Config): void {
   ctx.plugin(FrontendStatic, { distIndex: internals.resolveDistIndex(), immutablePrefixes: ['assets/'] })
   if (config.surfaceContext) {
     ctx.inject(['systemPrompt'], (promptCtx) => {
-      addHarnessSourceSection(promptCtx, SOURCE_ROOT)
+      addHarnessSourceSection(promptCtx, sourceRoot)
       promptCtx.systemPrompt.section({
         name: 'app:web-surface',
         order: promptCtx.systemPrompt.getSectionOrder('WEB_SURFACE'),
