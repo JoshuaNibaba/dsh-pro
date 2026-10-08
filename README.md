@@ -20,6 +20,21 @@
 
 已开启 `git rerere`:同一处冲突解决过一次，以后再遇到会自动套用。
 
+### 待贡献上游的分支
+
+2026-10-08 基于当时的 `upstream/master`(`5badb15009`)创建，均已推送到 origin。上游开放外部 PR 前，定期 `git rebase upstream/master` 保持可合并(这些分支只用于提交 PR,可以强推)。
+
+| 分支 | 内容 | 对应 custom 中的改动 |
+|---|---|---|
+| `feat/stream-websocket-compression` | Remote 流 WebSocket permessage-deflate,gateway `websocketCompression` 开关 | 流 WebSocket 压缩 |
+| `feat/immutable-web-asset-cache` | frontend-static `immutablePrefixes`,带内容哈希的 `assets/` 长期缓存 | Web 静态资源长期缓存 |
+| `feat/sidebar-file-download` | 右侧 Sidebar 文件树下载文件 | 文件树下载 |
+| `fix/rpc-handler-owner` | `connection.rpc` 注册归属调用方 fiber(状态栏依赖它) | 状态栏中的 RPC owner 修复 |
+| `feat/server-status-footer` | 基于 `fix/rpc-handler-owner`,服务器资源与连接状态栏 | 服务器状态栏 |
+| `feat/phone-layout` | 窄屏侧栏抽屉与 PNG 启动图标 | 手机布局与桌面图标 |
+
+模型原生搜索与 Session 历史窗口属于本 fork 的取舍，只留在 `custom`。
+
 ## 日常用法
 
 ```sh
