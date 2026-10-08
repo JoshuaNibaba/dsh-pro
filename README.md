@@ -77,4 +77,4 @@ dsh-custom release       # 打 custom-v* 标签并发布 GitHub Release
 
 ## 服务如何运行自定义版本
 
-dsh-remote 的 `run-web.sh` 在 `~/.dsh-remote/dsh-bin` 存在时，用它指向的 `apps/cli/lib/bin.js` 代替 npm 安装的 `dsh`。`deploy` 在 `~/.dsh-custom/release-a` / `release-b` 两个工作树之间轮换：在空闲的那个里构建、试启动成功后才切换链接并重启服务，正在运行的版本不会被原地重建。
+dsh-remote 的 `run-web.sh` 在 `~/.dsh-remote/dsh-bin` 存在时，用它指向的 `apps/cli/lib/bin.js` 代替 npm 安装的 `dsh`。`deploy` 在 `~/.dsh-custom/release-a` / `release-b` 两个工作树之间轮换：在空闲的那个里构建、试启动成功后才切换链接并重启服务，正在运行的版本不会被原地重建。切换时 `~/.dsh-custom/current` 软链接也指向新的工作树；web profile 把 `web-app` 的 `sourceRoot` 设为这个路径，系统提示词里的源码路径因此不随切换变化，提示词缓存不会失效。

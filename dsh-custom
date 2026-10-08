@@ -11,6 +11,7 @@ BRANCH=custom
 UPSTREAM=upstream
 STATE="$HOME/.dsh-custom"          # release slots and the trial DSH_HOME
 LINK="$HOME/.dsh-remote/dsh-bin"   # run-web.sh starts this instead of the npm dsh when present
+CURRENT="$STATE/current"           # stable path to the active slot; the web profile's web-app sourceRoot names it
 SERVICE=dsh-web
 
 # Files generated from source. On a sync conflict the official version is taken
@@ -30,6 +31,9 @@ GENERATED=(
 # Tests that cover the local changes; sync and resume run them before building.
 CUSTOM_TESTS=(
   packages/llm/llm-pi-ai/tests/web-search.spec.ts
+  packages/llm/llm-pi-ai/tests/tool-updates.spec.ts
+  packages/llm/llm-pi-ai/tests/context.spec.ts
+  packages/core/tools/tests/call-batching.spec.ts
   packages/web/web-search-model
   packages/web/tool-web
   packages/api/gateway/tests/stream-server.host.spec.ts
@@ -287,6 +291,8 @@ cmd_deploy() {
   smoke "$slot/apps/cli/lib/bin.js" || die "$slot 的构建结果无法启动 dsh web,服务保持不变"
   mkdir -p "$(dirname "$LINK")"
   ln -sfn "$slot/apps/cli/lib/bin.js" "$LINK"
+  # Sessions see this path in their system prompt; a stable name keeps prompt caches valid across slot switches.
+  ln -sfn "$slot" "$CURRENT"
   say "重启 $SERVICE(当前网页会断开，刷新即可)"
   sudo -n systemctl restart "$SERVICE"
   echo "服务已切换到自定义版本 $(git describe --tags "$sha")(上一个版本:${cur:-npm})"
