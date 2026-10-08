@@ -551,6 +551,25 @@ export interface Config {
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-client-ui-plugin-manager -->
 
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-client-ui-server-status -->
+<a id="deepseek-aidsh-client-ui-server-status"></a>
+
+## `@deepseek-ai/dsh-client-ui-server-status`
+
+- `inject`: `connection` · `webServer`
+- `source`: [`packages/client/ui-server-status/src/config.ts:5`](../packages/client/ui-server-status/src/config.ts)
+
+```ts config-catalog
+/** Sampling and request timings, in milliseconds. */
+export interface Config {
+  /** Shared Host sampling cadence and browser polling delay. */
+  sampleIntervalMs: number
+  /** Maximum time allowed for one browser RPC request. */
+  requestTimeoutMs: number
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-client-ui-server-status -->
+
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-client-ui-settings-account -->
 <a id="deepseek-aidsh-client-ui-settings-account"></a>
 

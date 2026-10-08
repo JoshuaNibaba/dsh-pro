@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-10-06-host-resource-sampling-and-ephemeral-connection-observations.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-10-06-host-resource-sampling-and-ephemeral-connection-observations.md
+/agent-note-host-resource-sampling-and-ephemeral-connection-observations:
+  en: 865f552a27249157
+  zh: b0529ea99cea6529
+/agent-note-host-resource-sampling-and-ephemeral-connection-observations/problem:
+  en: 48134ab419ab84ed
+  zh: 9eb9de82cfe401f6
+/agent-note-host-resource-sampling-and-ephemeral-connection-observations/decision:
+  en: 1c4cd97a44a8ba7f
+  zh: 6e1fb2c47c0813fc
+/agent-note-host-resource-sampling-and-ephemeral-connection-observations/alternatives-considered:
+  en: 28f1257d9268892c
+  zh: 7196e03bc63aec51
+/agent-note-host-resource-sampling-and-ephemeral-connection-observations/consequences:
+  en: f2d6a2a66be65530
+  zh: a80a739e29b40874

@@ -1,0 +1,5 @@
+- name: cordis:server-status-test-connection
+- name: cordis:server-status
+  config:
+    sampleIntervalMs: 320
+    requestTimeoutMs: 876
