@@ -43,8 +43,11 @@ export const ESCALATION_TARGETS: readonly SandboxMode[] = ['workspace-write', 'd
 /**
  * Validate the escalation argument pairing a tool schema cannot express:
  * `sandbox_permissions` and `justification` travel together — an approval
- * prompt without a reason, or a reason driving nothing, is a malformed ask —
- * and the justification must be a non-empty sentence.
+ * prompt without a reason, or a reason driving nothing, is a malformed ask. A
+ * blank `justification` without `sandbox_permissions` carries no reason and is
+ * accepted as absent. {@link approveEscalation} requires a non-empty
+ * justification only for a strictly wider mode, because repeating the call's
+ * effective mode asks nobody.
  * @param sandboxPermissions - the raw `sandbox_permissions` argument, if given.
  * @param justification - the raw `justification` argument, if given.
  */
@@ -52,11 +55,8 @@ export function validateEscalationArgs(sandboxPermissions: string | undefined, j
   if (sandboxPermissions !== undefined && justification === undefined) {
     throw new Error('invalid escalation: sandbox_permissions requires a justification')
   }
-  if (justification !== undefined && sandboxPermissions === undefined) {
+  if (justification !== undefined && sandboxPermissions === undefined && justification.trim().length > 0) {
     throw new Error('invalid escalation: justification is only valid together with sandbox_permissions')
-  }
-  if (justification !== undefined && justification.trim().length === 0) {
-    throw new Error('invalid justification: expected a non-empty sentence')
   }
 }
 
@@ -160,10 +160,11 @@ export interface EscalationRequest {
 
 /**
  * Resolve a sandbox permission request before execution. Repeating the call's
- * effective mode returns it without approval. A strictly wider mode requires
- * approval and applies only to this call. Narrower or unsupported targets,
- * missing approval services or agents for widening, and non-grant outcomes
- * throw before execution.
+ * effective mode returns it without approval, whatever the justification. A
+ * strictly wider mode requires a non-empty justification and approval, and
+ * applies only to this call. Narrower or unsupported targets, a blank
+ * justification or missing approval services or agents for widening, and
+ * non-grant outcomes throw before execution.
  * @param request - the escalation to judge (see {@link EscalationRequest}).
  * @param approval - the approval ingredients the tool holds (see {@link EscalationApproval}).
  * @returns the granted mode, consumed by the one call that asked.
@@ -176,6 +177,9 @@ export async function approveEscalation<A, C>(request: EscalationRequest, approv
   // vocabulary; the effective mode is per-call truth).
   if (!(WIDER_MODES[effectiveMode] ?? []).includes(mode as SandboxMode)) {
     throw new Error(`sandbox escalation to "${mode}" is not strictly wider than this call's current "${effectiveMode}" mode`)
+  }
+  if (justification.trim().length === 0) {
+    throw new Error('invalid justification: expected a non-empty sentence')
   }
   if (approval.approver === undefined) {
     throw new Error(`sandbox escalation to "${mode}" requires approval, but no approval service is composed`)

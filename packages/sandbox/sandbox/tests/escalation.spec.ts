@@ -31,15 +31,17 @@ describe('the strictly-wider ladder', () => {
 })
 
 describe('validateEscalationArgs', () => {
-  it('accepts neither field, or both with a non-empty justification', () => {
+  it('accepts neither field, both fields, or a blank justification alone', () => {
     expect(() => { validateEscalationArgs(undefined, undefined) }).not.toThrow()
     expect(() => { validateEscalationArgs('workspace-write', 'because the workspace needs it') }).not.toThrow()
+    // Blankness matters only to a widening, which approveEscalation judges against the effective mode.
+    expect(() => { validateEscalationArgs('workspace-write', '   ') }).not.toThrow()
+    expect(() => { validateEscalationArgs(undefined, ' \t') }).not.toThrow()
   })
 
-  it('rejects one field without the other, and a blank justification', () => {
+  it('rejects one field without the other', () => {
     expect(() => { validateEscalationArgs('workspace-write', undefined) }).toThrow(/requires a justification/)
     expect(() => { validateEscalationArgs(undefined, 'orphan reason') }).toThrow(/only valid together with sandbox_permissions/)
-    expect(() => { validateEscalationArgs('workspace-write', '   ') }).toThrow(/non-empty sentence/)
   })
 })
 
@@ -101,6 +103,15 @@ describe('approveEscalation', () => {
     expect(seen).toEqual([])
     await expect(approveEscalation(request, ingredients({ approver: undefined, agent: undefined })))
       .resolves.toBe(mode)
+    await expect(approveEscalation({ ...request, justification: '' }, ingredients({ approver: approver('rejected') })))
+      .resolves.toBe(mode)
+  })
+
+  it('a widening with a blank justification fails closed without asking', async () => {
+    const seen: unknown[] = []
+    await expect(approveEscalation(req({ justification: ' \n' }), ingredients({ approver: approver('allowed-once', r => seen.push(r)) })))
+      .rejects.toThrow('invalid justification: expected a non-empty sentence')
+    expect(seen).toEqual([])
   })
 
   it('a narrower or unsupported target fails closed without asking', async () => {

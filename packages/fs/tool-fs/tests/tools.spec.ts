@@ -945,10 +945,15 @@ describe('sandbox escalation API (write/edit)', () => {
     }])
   })
 
-  it.each(['workspace-write', 'danger-full-access'] as const)('writes under repeated %s without approval', async (mode) => {
+  it.each([
+    ['workspace-write', 'use the current permissions'],
+    ['danger-full-access', 'use the current permissions'],
+    // A model may fill every optional field; repeating the effective mode needs no reason.
+    ['danger-full-access', ''],
+  ] as const)('writes under repeated %s with justification %j without approval', async (mode, justification) => {
     const { ctx, fs } = await setupConfining()
     const result = await call(ctx, 'write', {
-      file_path: 'a.txt', content: 'x', sandbox_permissions: mode, justification: 'use the current permissions',
+      file_path: 'a.txt', content: 'x', sandbox_permissions: mode, justification,
     }, escalationAgent([{ type: 'sandbox/mode', data: { mode } }]))
     expect(result.isError).toBe(false)
     expect(fs.stamped).toEqual([{
@@ -984,6 +989,19 @@ describe('sandbox escalation API (write/edit)', () => {
     const missing = await call(ctx, 'write', { file_path: 'a.txt', content: 'x', sandbox_permissions: 'workspace-write' }, escalationAgent())
     expect(missing.isError).toBe(true)
     expect(text(missing)).toContain('sandbox_permissions requires a justification')
+  })
+
+  it('rejects a widening with a blank justification without prompting', async () => {
+    const { ctx, fs } = await setupConfining({ approval: true })
+    let prompted = false
+    ctx.on('approval/request', () => { prompted = true; return Promise.resolve('allowed-once' as const) })
+    const result = await call(ctx, 'edit', {
+      file_path: 'a.txt', old_string: 'x', new_string: 'y', sandbox_permissions: 'danger-full-access', justification: ' ',
+    }, escalationAgent())
+    expect(result.isError).toBe(true)
+    expect(text(result)).toContain('invalid justification: expected a non-empty sentence')
+    expect(prompted).toBe(false)
+    expect(fs.stamped).toEqual([])
   })
 
   it('sandbox_permissions under a non-confining backend fails closed (unadvertised field still reaches execute)', async () => {

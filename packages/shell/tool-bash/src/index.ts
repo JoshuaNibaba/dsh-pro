@@ -81,10 +81,7 @@ function validateBashArgs(args: BashToolArgs, effectiveMode: SandboxMode | undef
     throw new Error(`invalid timeoutMs: expected a positive number, got ${JSON.stringify(args.timeoutMs)}`)
   }
   if (args.sandbox_permissions !== undefined && args.sandbox_permissions === effectiveMode) return
-  const justification = args.sandbox_permissions === undefined && args.justification?.trim() === ''
-    ? undefined
-    : args.justification
-  validateEscalationArgs(args.sandbox_permissions, justification)
+  validateEscalationArgs(args.sandbox_permissions, args.justification)
 }
 
 function bashDescription(): string {
