@@ -282,11 +282,18 @@
   padding: 0 8px 8px;
 }
 
+/* The shared dialog is 380px wide; the task editor needs room for its details text. */
+.editorDialog {
+  width: min(560px, 100%);
+  max-height: 100%;
+}
+
 .editor {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  min-width: min(480px, 80vw);
+  width: 100%;
+  min-width: 0;
 }
 
 .field {
@@ -297,8 +304,17 @@
   font-size: 13px;
 }
 
+/* The shared input wrapper is inline; the title field spans the dialog. */
+.titleInput {
+  box-sizing: border-box;
+  width: 100%;
+}
+
 .textarea {
+  box-sizing: border-box;
+  width: 100%;
   min-height: 120px;
+  max-height: 50vh;
   padding: 8px 10px;
   border-radius: 8px;
   border: 1px solid var(--dsw-alias-border-l2);

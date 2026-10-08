@@ -73,6 +73,23 @@ describe('Kanban Web board', () => {
     const editor = page.getByRole('dialog', { name: 'New task', exact: true })
     await editor.getByPlaceholder('What should be done').fill(TASK_TITLE)
     await editor.getByPlaceholder('Extra instructions sent to the session').fill(TASK_DETAILS)
+    // The editor fits inside its dialog: no field reaches past the card's edge.
+    for (const width of [1680, 420]) {
+      await page.setViewportSize({ width, height: 1000 })
+      const card = await editor.boundingBox()
+      expect(card!.x).toBeGreaterThanOrEqual(0)
+      expect(card!.x + card!.width).toBeLessThanOrEqual(width)
+      // The title field's outline is its wrapper; both fields share the dialog's right inset.
+      const title = await editor.getByPlaceholder('What should be done').locator('..').boundingBox()
+      const details = await editor.getByPlaceholder('Extra instructions sent to the session').boundingBox()
+      const create = await editor.getByRole('button', { name: 'Create', exact: true }).boundingBox()
+      expect(Math.abs(title!.x + title!.width - (details!.x + details!.width))).toBeLessThanOrEqual(1)
+      expect(details!.x + details!.width).toBeLessThanOrEqual(card!.x + card!.width - 16)
+      expect(create!.x + create!.width).toBeLessThanOrEqual(card!.x + card!.width)
+      const shot = process.env['DSH_KANBAN_EDITOR_SCREENSHOT']
+      if (shot !== undefined) await page.screenshot({ path: shot.replace('.png', `-${width}.png`) })
+    }
+    await page.setViewportSize({ width: 1680, height: 1000 })
     await editor.getByRole('button', { name: 'Create', exact: true }).click()
     const plan = board.getByTestId('kanban-column-plan')
     const card = plan.locator('article', { hasText: TASK_TITLE })

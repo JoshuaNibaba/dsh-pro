@@ -340,6 +340,7 @@ function TaskEditor({ t, state, onChange, onSave }: {
       onClose={() => { onChange(null) }}
       title={state?.mode === 'edit' ? t('editor.editTitle') : t('editor.createTitle')}
       closeLabel={t('editor.close')}
+      className={clsx(css.editorDialog)}
       footer={(
         <div className={css.editorFooter}>
           <Button size="sm" variant="ghost" onClick={() => { onChange(null) }}>{t('editor.cancel')}</Button>
@@ -353,7 +354,7 @@ function TaskEditor({ t, state, onChange, onSave }: {
         <form className={css.editor} onSubmit={(event) => { event.preventDefault(); save() }}>
           <label className={css.field}>
             <span>{t('editor.titleLabel')}</span>
-            <Input data-modal-autofocus value={state.title} placeholder={t('editor.titlePlaceholder')}
+            <Input className={clsx(css.titleInput)} data-modal-autofocus value={state.title} placeholder={t('editor.titlePlaceholder')}
               onChange={(event) => { onChange({ ...state, title: event.target.value }) }} />
           </label>
           <label className={css.field}>
