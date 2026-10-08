@@ -2,7 +2,7 @@
 
 English | [中文](kanban.zh.md)
 
-The experimental Kanban board plans tasks per Workspace and sends them to Sessions one at a time. The [Host service](../../packages/experimental/kanban/README.md) owns storage and dispatch, the [browser page](../../packages/experimental/client-ui-kanban/README.md) edits and moves tasks, and the [optional bundle](../../packages/experimental/kanban-bundle/README.md) switches both on.
+The experimental Kanban board plans tasks per Workspace and sends them to Sessions one at a time. The [Host service](../../packages/experimental/kanban/README.md) owns storage and dispatch, the [Conversation View](../../packages/experimental/client-ui-kanban/README.md) edits and moves tasks, and the [optional bundle](../../packages/experimental/kanban-bundle/README.md) switches both on.
 
 ## Tasks and lanes
 

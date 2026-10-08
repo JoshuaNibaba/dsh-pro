@@ -3,8 +3,8 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/subsystems/kanban.md
 /kanban:
-  en: a0164ae0b2d0408f
-  zh: 6742a4ac91bf8af7
+  en: 503a85c9a857dae6
+  zh: 57e0700e719524dc
 /kanban/tasks-and-lanes:
   en: 813e451cb527e95a
   zh: 4b38308d0d7b8196

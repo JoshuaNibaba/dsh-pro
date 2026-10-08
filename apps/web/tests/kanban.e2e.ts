@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
 import { chromium, type Browser, type Page } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
-import { LlmAdapter, type GenerateOptions, type StreamChunk } from '@deepseek-ai/dsh-llm'
+import { createUserMessage, LlmAdapter, type GenerateOptions, type StreamChunk } from '@deepseek-ai/dsh-llm'
 import type { AgentHandle } from '@deepseek-ai/dsh-agent'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { launchWebScaffold, watchConsole, type WebScaffold } from './scaffold.ts'
@@ -57,6 +57,9 @@ describe('Kanban Web board', () => {
     handle = await scaffold.ctx.agents.create({ sessionId: SESSION, meta: { cwd }, agentOptions: { provider: PROVIDER, model: MODEL } })
     handle.agent.session.append('session/title', { title: LANE_TITLE, messageSeqs: [], source: { kind: 'user' } })
     await workspace.attachSession(handle.agent.id)
+    // A started Session shows its View tabs; a blank one shows the Hero instead.
+    handle.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Hello' }], source: { kind: 'user' } }))
+    await handle.agent.whenIdle()
   }, 120_000)
 
   afterAll(async () => {
@@ -66,9 +69,15 @@ describe('Kanban Web board', () => {
 
   it('plans a task, queues it on a Session lane, and shows it completed', async () => {
     onTestFailed(async () => { await saveFailureShot(page, 'kanban-board') })
-    await page.getByRole('button', { name: 'Kanban', exact: true }).click()
+    // The board is a Conversation View tab beside Chat and Trajectory.
+    await page.getByText(LANE_TITLE, { exact: true }).first().click()
+    const tab = page.locator('[data-conversation-tabs]').getByRole('tab', { name: 'Kanban board', exact: true })
+    await tab.click()
+    expect(await tab.getAttribute('aria-selected')).toBe('true')
     const board = page.getByTestId('kanban-page')
     await board.waitFor()
+    const headerShot = process.env['DSH_KANBAN_HEADER_SCREENSHOT']
+    if (headerShot !== undefined) await page.screenshot({ path: headerShot })
     await board.getByRole('button', { name: 'New task', exact: true }).click()
     const editor = page.getByRole('dialog', { name: 'New task', exact: true })
     await editor.getByPlaceholder('What should be done').fill(TASK_TITLE)
@@ -102,21 +111,11 @@ describe('Kanban Web board', () => {
 
     const done = board.getByTestId('kanban-column-done').locator('article[data-status="done"]', { hasText: TASK_TITLE })
     await done.waitFor({ timeout: 30_000 })
-    expect(adapter.prompts).toHaveLength(1)
-    expect(adapter.prompts[0]).toContain(`${TASK_TITLE}\n\n${TASK_DETAILS}`)
+    expect(adapter.prompts).toHaveLength(2)
+    expect(adapter.prompts[1]).toContain(`${TASK_TITLE}\n\n${TASK_DETAILS}`)
     const sent = handle.agent.session.snapshotEvents().flatMap(event =>
       event.type === 'user/message' && event.data.source.kind === 'kanban' ? [event.data.content] : [])
     expect(sent).toEqual([[{ type: 'text', text: `${TASK_TITLE}\n\n${TASK_DETAILS}` }]])
-    // The completed card opens its Session; that Session's header links back to the board.
-    await done.getByRole('button', { name: 'Open session', exact: true }).click()
-    const headerLink = page.locator('[data-conversation-tabs] [data-kanban-header-link]')
-    await headerLink.waitFor()
-    expect(await headerLink.innerText()).toBe('Kanban board')
-    const headerShot = process.env['DSH_KANBAN_HEADER_SCREENSHOT']
-    if (headerShot !== undefined) await page.screenshot({ path: headerShot })
-    await headerLink.click()
-    await board.waitFor()
-    await done.waitFor()
     const shot = process.env['DSH_KANBAN_SCREENSHOT']
     if (shot !== undefined) await page.screenshot({ path: shot })
     expect(tripwire.pageErrors).toEqual([])

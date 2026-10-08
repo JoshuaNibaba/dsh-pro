@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-This experimental Host service stores one Kanban board per Workspace and sends the tasks a user queues on a Session lane to that Session, one task per Turn. A task completes when the Turn that claimed its message ends with `completed`; any other end fails the task and pauses its lane until the user retries, skips, or withdraws it. The browser page lives in [client-ui-kanban](../client-ui-kanban/README.md), and the [kanban-bundle](../kanban-bundle/README.md) switches both on.
+This experimental Host service stores one Kanban board per Workspace and sends the tasks a user queues on a Session lane to that Session, one task per Turn. A task completes when the Turn that claimed its message ends with `completed`; any other end fails the task and pauses its lane until the user retries, skips, or withdraws it. The Conversation View tab lives in [client-ui-kanban](../client-ui-kanban/README.md), and the [kanban-bundle](../kanban-bundle/README.md) switches both on.
 
 ## Table of Contents
 

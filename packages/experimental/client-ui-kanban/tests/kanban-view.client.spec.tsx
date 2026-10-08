@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-/** The board page renders the three columns and turns gestures into Kanban actions. */
+/** The board View renders the three columns and turns gestures into Kanban actions. */
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import type { KanbanTask, KanbanTaskId, KanbanTaskStatus } from '@deepseek-ai/dsh-experimental-kanban/types'
@@ -7,9 +7,7 @@ import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { BoardSnapshot } from '../src/client/board-source.ts'
-import { KanbanHeaderLink } from '../src/client/KanbanHeaderLink.tsx'
-import { KanbanIcon } from '../src/client/KanbanIcon.tsx'
-import { KanbanPage } from '../src/client/KanbanPage.tsx'
+import { KanbanView as KanbanBoardView } from '../src/client/KanbanView.tsx'
 import { en } from '../src/client/locales.ts'
 import type { KanbanView } from '../src/client/view-state.ts'
 
@@ -38,6 +36,8 @@ interface Setup {
   readonly view?: Partial<KanbanView>
   readonly workspaces?: readonly { workspaceId: WorkspaceId; title: string; sessionIds: SessionId[] }[]
   readonly fail?: boolean
+  /** Session whose View renders; defaults to the first lane Session. */
+  readonly sessionId?: SessionId
 }
 
 function setup(options: Setup = {}) {
@@ -75,13 +75,14 @@ function setup(options: Setup = {}) {
   const select = <S, R>(state: S) => (selector: (value: S) => R) => selector(state)
   const props = {
     t,
+    sessionId: options.sessionId ?? S1,
     useWorkspaces: select(workspaces),
     useSessions: select(sessions),
     useBoard: select(board),
     useView: select(view),
     ...actions,
   }
-  const result = render(<KanbanPage {...props as Parameters<typeof KanbanPage>[0]} />)
+  const result = render(<KanbanBoardView {...props as Parameters<typeof KanbanBoardView>[0]} />)
   return { ...actions, ...result }
 }
 
@@ -99,7 +100,7 @@ function transfer() {
 
 const flush = () => act(async () => { await Promise.resolve() })
 
-describe('KanbanPage', () => {
+describe('KanbanView', () => {
   it('lays out the plan, lanes, and finished tasks of the selected Workspace', () => {
     setup({ tasks: [
       task('p', 'draft', { prompt: 'details' }),
@@ -127,14 +128,12 @@ describe('KanbanPage', () => {
     expect(within(idle).queryByText(en['lane.empty'])).toBeNull()
   })
 
-  it('selects the first Workspace when the stored choice is gone and switches through the menu', () => {
-    const { selectWorkspace } = setup({ view: { workspaceId: brandString<WorkspaceId>('gone') } })
+  it('follows the Workspace that holds the current Session', () => {
+    const { selectWorkspace } = setup({ view: { workspaceId: WS2 } })
     expect(selectWorkspace).toHaveBeenCalledWith(WS1)
-    fireEvent.click(screen.getByRole('button', { name: en['workspace.choose'] }))
-    fireEvent.click(screen.getByText('Beta'))
-    expect(selectWorkspace).toHaveBeenLastCalledWith(WS2)
-    fireEvent.click(screen.getByRole('button', { name: en['workspace.choose'] }))
-    fireEvent.keyDown(document, { key: 'Escape' })
+    cleanup()
+    const settled = setup()
+    expect(settled.selectWorkspace).not.toHaveBeenCalled()
   })
 
   it('shows empty states and loading copy', () => {
@@ -142,12 +141,12 @@ describe('KanbanPage', () => {
     expect(screen.getByText(en['board.loading'])).toBeTruthy()
     expect(screen.getByText(en['done.empty'])).toBeTruthy()
     cleanup()
-    setup({ workspaces: [{ workspaceId: WS1, title: 'Alpha', sessionIds: [] }] })
+    setup({ sessionId: S3, workspaces: [{ workspaceId: WS1, title: 'Alpha', sessionIds: [S3] }] })
     expect(screen.getByText(en['plan.empty'])).toBeTruthy()
     expect(screen.getByText(en['run.empty'])).toBeTruthy()
     cleanup()
     setup({ workspaces: [] })
-    expect(screen.getAllByText(en['workspace.none']).length).toBeGreaterThan(0)
+    expect(screen.getByText(en['workspace.none'])).toBeTruthy()
     cleanup()
     setup({ board: { workspaceId: WS2 } })
     expect(screen.getByText(en['plan.empty'])).toBeTruthy()
@@ -273,17 +272,4 @@ describe('KanbanPage', () => {
     expect(screen.getByRole('alert').textContent).toContain('Could not load the board:')
   })
 
-  it('renders the sidebar glyph at the requested size', () => {
-    const { container } = render(<KanbanIcon {...{ size: 18 } as Parameters<typeof KanbanIcon>[0]} />)
-    expect(container.querySelector('svg')?.getAttribute('width')).toBe('18')
-  })
-
-  it('renders the header link with the owner class and opens the board for its Session', () => {
-    const openBoard = vi.fn()
-    render(<KanbanHeaderLink {...{ className: 'tab', sessionId: S1, openBoard, t } as Parameters<typeof KanbanHeaderLink>[0]} />)
-    const link = screen.getByRole('button', { name: en['header.link'] })
-    expect(link.className).toBe('tab')
-    fireEvent.click(link)
-    expect(openBoard).toHaveBeenCalledWith(S1)
-  })
 })

@@ -1,22 +1,17 @@
-/** Source-safe lifecycle for the Kanban Remote namespace and its browser page. */
+/** Source-safe lifecycle for the Kanban Remote namespace and its Conversation View. */
 import type { Context } from '@deepseek-ai/cordis'
 import { RemoteStreamCarrierError } from '@deepseek-ai/dsh-api-gateway/client'
 import type {} from '@deepseek-ai/dsh-api-remotes/client'
 import type {} from '@deepseek-ai/dsh-api-session-controller/client'
-import type {} from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
-import type { MainPanelId } from '@deepseek-ai/dsh-client-ui-layout/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
-import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
 import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
 import type {} from '@deepseek-ai/dsh-experimental-kanban/remote'
 import type { KanbanBoard } from '@deepseek-ai/dsh-experimental-kanban/types'
 import type { RemoteResult, TypertRemoteContribution } from '@deepseek-ai/dsh-typert-protocol'
 import { createBoardSource } from './board-source.ts'
-import { KanbanHeaderLink, type KanbanHeaderLinkInjected } from './KanbanHeaderLink.tsx'
-import { KanbanIcon } from './KanbanIcon.tsx'
-import { KanbanPage, type KanbanActionResult, type KanbanInjected } from './KanbanPage.tsx'
+import { KanbanView, type KanbanActionResult, type KanbanInjected } from './KanbanView.tsx'
 import { en, NS, zh, type KanbanKey } from './locales.ts'
 import { createKanbanViewState } from './view-state.ts'
 
@@ -27,10 +22,8 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
   }
 }
 
-const PANEL_ID = 'kanban' as MainPanelId
-
-/** Browser services the page and its Remote calls require. */
-export const inject = ['remote', 'slots', 'locale', 'sessions', 'uiWorkspace', 'workspaces', 'layout']
+/** Browser services the View and its Remote calls require. */
+export const inject = ['remote', 'slots', 'locale', 'sessions', 'uiWorkspace']
 
 const outcome = async (call: Promise<RemoteResult<unknown>>): Promise<KanbanActionResult> => {
   const result = await call
@@ -75,34 +68,21 @@ function registerUi(ctx: Context): void {
     },
     openSession: (sessionId) => { ctx.uiWorkspace.openSession(sessionId) },
   }
-  const link: KanbanHeaderLinkInjected = {
-    openBoard: (sessionId) => {
-      const owner = ctx.workspaces.list.getSnapshot().items.find(item => item.sessionIds.includes(sessionId))
-      if (owner !== undefined) injected.selectWorkspace(owner.workspaceId)
-      ctx.layout.selectPanel(PANEL_ID)
-    },
-  }
-
-  ctx.slots.inject('main', () => ctx.slots.register({
-    name: 'main', key: PANEL_ID, locale: NS, inject: () => injected,
-  }, KanbanPage))
-  ctx.slots.inject('conversation.session.header.links', () => ctx.slots.register({
-    name: 'conversation.session.header.links', id: 'kanban', order: 10, locale: NS, inject: () => link,
-  }, KanbanHeaderLink))
-  ctx.slots.inject('sidebar.panellist', () => ctx.slots.register({
-    name: 'sidebar.panellist', id: PANEL_ID, order: 11, locale: NS, label: () => t('panel'),
-  }, KanbanIcon))
+  // The View follows the Conversation tab order after Chat (0) and Trajectory (10).
+  ctx.slots.inject('conversation.view', () => ctx.slots.register({
+    name: 'conversation.view', id: 'kanban', order: 20, locale: NS, label: () => t('view.tab'), inject: () => injected,
+  }, KanbanView))
 }
 
 /**
- * Mount the Kanban namespace without adding it to stable API Remotes, then register the page.
+ * Mount the Kanban namespace without adding it to stable API Remotes, then register the View.
  * @param ctx - Client runtime owning the Remote, dictionaries, and slots.
  * @param contribution - generated Kanban Remote definitions.
  * @returns disposer joining UI and Remote withdrawal.
  */
 export async function mountKanban(ctx: Context, contribution: TypertRemoteContribution): Promise<() => Promise<void>> {
   const disposeRemote = await ctx.remote.$mount(contribution)
-  const ui = ctx.inject(['remote.kanban', 'slots', 'locale', 'sessions', 'uiWorkspace', 'workspaces', 'layout'], registerUi)
+  const ui = ctx.inject(['remote.kanban', 'slots', 'locale', 'sessions', 'uiWorkspace'], registerUi)
   try { await ui } catch (error) { await ui.dispose(); await disposeRemote(); throw error }
   return async () => { await ui.dispose(); await disposeRemote() }
 }

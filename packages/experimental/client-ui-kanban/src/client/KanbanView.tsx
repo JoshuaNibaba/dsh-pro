@@ -1,13 +1,13 @@
-/** The Kanban board page: plan pool, Session lanes, and completed tasks of one Workspace. */
+/** The Kanban Conversation View: plan pool, Session lanes, and completed tasks of the Session's Workspace. */
 import { useEffect, useMemo, useState, type DragEvent, type ReactNode } from 'react'
 import clsx from 'clsx'
 import {
   Button, IconChevronDownOutlineRegular, IconChevronRightOutlineRegular, IconEditOutlineRegular, IconPlusOutlineRegular,
-  IconRefreshOutlineRegular, IconRightUpOutlineRegular, IconTrashOutlineRegular, IconCloseOutlineRegular, Input, Menu,
+  IconRefreshOutlineRegular, IconRightUpOutlineRegular, IconTrashOutlineRegular, IconCloseOutlineRegular, Input,
   Modal, StateDot,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, HostObservable, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
-import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
+import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
@@ -15,12 +15,12 @@ import type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
 import type { KanbanMoveTarget, KanbanTask, KanbanTaskId, KanbanTaskStatus } from '@deepseek-ai/dsh-experimental-kanban/types'
 import type { BoardSnapshot } from './board-source.ts'
 import type { KanbanView } from './view-state.ts'
-import css from './KanbanPage.module.css'
+import css from './KanbanView.module.css'
 
 /** Outcome of one Host mutation as the page reports it. */
 export type KanbanActionResult = { readonly ok: true } | { readonly ok: false; readonly message: string }
 
-/** Data sources and callbacks the page receives from its registration. */
+/** Data sources and callbacks the View receives from its registration. */
 export interface KanbanInjected {
   readonly hooks: {
     readonly board: HostObservable<BoardSnapshot>
@@ -39,10 +39,10 @@ export interface KanbanInjected {
   readonly openSession: (sessionId: SessionId) => void
 }
 
-/** Root page props derived from the framework seats and the injected face. */
-export type KanbanPageProps = PropsRuntime<'main'> & InjectFace<KanbanInjected> & PropsLocale<'kanban'>
+/** Conversation View props derived from the framework seats and the injected face. */
+export type KanbanViewProps = PropsRuntime<'conversation.view'> & InjectFace<KanbanInjected> & PropsLocale<'kanban'>
 
-type T = KanbanPageProps['t']
+type T = KanbanViewProps['t']
 
 /** Drag payload type; only Kanban cards carry it. */
 const DRAG_TYPE = 'application/x-dsh-kanban-task'
@@ -59,22 +59,21 @@ type EditorState =
   | { readonly mode: 'edit'; readonly id: KanbanTaskId; readonly title: string; readonly prompt: string }
 
 /**
- * Render the board of the selected Workspace.
- * @param props - Workspace and Session seats, board and view hooks, mutation callbacks, and copy.
+ * Render the board of the Workspace that holds the current Session.
+ * @param props - Session and Workspace seats, board and view hooks, mutation callbacks, and copy.
  * @returns the three-column board.
  */
-export function KanbanPage(props: KanbanPageProps) {
-  const { t, useWorkspaces, useSessions, useBoard, useView } = props
+export function KanbanView(props: KanbanViewProps) {
+  const { t, sessionId, useWorkspaces, useSessions, useBoard, useView } = props
   const workspaces = useWorkspaces(state => state)
   const sessions = useSessions(state => state.byId)
   const board = useBoard(state => state)
   const view = useView(state => state)
   const [error, setError] = useState<string | null>(null)
   const [editor, setEditor] = useState<EditorState | null>(null)
-  const [picking, setPicking] = useState(false)
   const [dragging, setDragging] = useState<KanbanTaskId | null>(null)
 
-  const selected = workspaces.items.find(item => item.workspaceId === view.workspaceId) ?? workspaces.items[0]
+  const selected = workspaces.items.find(item => item.sessionIds.includes(sessionId))
   useEffect(() => {
     if (selected !== undefined && selected.workspaceId !== view.workspaceId) props.selectWorkspace(selected.workspaceId)
   }, [selected?.workspaceId, view.workspaceId])
@@ -192,22 +191,6 @@ export function KanbanPage(props: KanbanPageProps) {
 
   return (
     <section className={css.page} aria-label={t('title')} data-testid="kanban-page">
-      <header className={css.header}>
-        <h1 className={css.heading}>{t('title')}</h1>
-        <Menu
-          open={picking}
-          onClose={() => { setPicking(false) }}
-          selectedId={selected?.workspaceId}
-          items={workspaces.items.map(item => ({ id: item.workspaceId, label: item.title }))}
-          onSelect={(id) => { props.selectWorkspace(id as WorkspaceId); setPicking(false) }}
-          anchor={(
-            <Button size="sm" variant="outline" aria-label={t('workspace.choose')} aria-haspopup="menu"
-              onClick={() => { setPicking(open => !open) }} icon={<IconChevronDownOutlineRegular size={14} />}>
-              {selected?.title ?? t('workspace.none')}
-            </Button>
-          )}
-        />
-      </header>
       {error !== null && (
         <div className={css.notice} role="alert">
           <span>{t('error.action', { message: error })}</span>

@@ -407,7 +407,6 @@ function mount(fixture: Awaited<ReturnType<typeof bench>>) {
         useStore={bindSnapshotSelector(conversation)}
         actions={conversation.actions}
         renderSlot={() => null}
-        useConversationHeaderLinks={selector => selector(0)}
         open={vi.fn()}
         selectView={conversation.actions.setView}
         t={tConversation}

@@ -2,7 +2,7 @@
 
 [English](kanban.md) | 中文
 
-实验性看板按工作区规划任务，并把任务逐个发送给会话。[Host 服务](../../packages/experimental/kanban/README.zh.md)负责存储和调度，[浏览器页面](../../packages/experimental/client-ui-kanban/README.zh.md)编辑和移动任务，[可选 Bundle](../../packages/experimental/kanban-bundle/README.zh.md) 同时启用两者。
+实验性看板按工作区规划任务，并把任务逐个发送给会话。[Host 服务](../../packages/experimental/kanban/README.zh.md)负责存储和调度，[会话视图](../../packages/experimental/client-ui-kanban/README.zh.md)编辑和移动任务，[可选 Bundle](../../packages/experimental/kanban-bundle/README.zh.md) 同时启用两者。
 
 ## 任务与泳道
 

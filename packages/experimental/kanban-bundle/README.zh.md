@@ -25,7 +25,7 @@ kind: "package-bundle"
 <a id="use-this-package"></a>
 ## 使用此包
 
-在 Web 侧栏打开插件管理页，启用带三列图标的“看板”。侧栏随后出现看板入口，页面按工作区规划任务，并把任务排到会话泳道上；[页面 README](../client-ui-kanban/README.zh.md) 介绍看板，[服务 README](../kanban/README.zh.md) 介绍调度规则。停用 Bundle 会停止调度；已保存的任务仍保留在磁盘上。
+在 Web 侧栏打开插件管理页，启用带三列图标的“看板”。每个已开始的会话随后在“对话”“轨迹”旁出现**任务看板**标签，用于规划会话所在工作区的任务，并把任务排到会话泳道上；[视图 README](../client-ui-kanban/README.zh.md) 介绍看板，[服务 README](../kanban/README.zh.md) 介绍调度规则。停用 Bundle 会停止调度；已保存的任务仍保留在磁盘上。
 
 -----
 
@@ -53,7 +53,7 @@ kind: "package-bundle"
 ## 进一步探索
 
 - [看板服务](../kanban/README.zh.md) — 存储、调度和 Remote namespace。
-- [看板页面](../client-ui-kanban/README.zh.md) — 浏览器看板。
+- [看板视图](../client-ui-kanban/README.zh.md) — 浏览器看板。
 
 -----
 
@@ -78,7 +78,7 @@ kind: "package-bundle"
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- Bundle 启用期间，其页面为每一行提供开关。两行必须同时启用：关闭 `kanban` 会使页面失去其 Remote namespace。
+- Bundle 启用期间，其页面为每一行提供开关。两行必须同时启用：关闭 `kanban` 会使视图失去其 Remote namespace。
 
 -----
 

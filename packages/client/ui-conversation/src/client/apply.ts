@@ -198,7 +198,6 @@ export function apply(ctx: Context, config: Config = Config({})): void {
     activateView(sessionId, readConversationViewPreference(sessionId))
   }
   const conversationViews = createSnapshotStore<readonly ViewTab[]>(viewTabs())
-  const conversationHeaderLinks = createSnapshotStore<number>(0)
   const bindings = new Set<SessionBinding>()
   const trackedBindings = new WeakSet<SessionBinding>()
   const trackBinding = (binding: SessionBinding): void => {
@@ -220,17 +219,11 @@ export function apply(ctx: Context, config: Config = Config({})): void {
   }
   ctx.effect(() => {
     const disposeViews = slots.subscribe('conversation.view', refreshViews)
-    const refreshLinks = (): void => {
-      conversationHeaderLinks.set(slots.entries('conversation.session.header.links').length)
-    }
-    refreshLinks()
-    const disposeLinks = slots.subscribe('conversation.session.header.links', refreshLinks)
     const disposeLocale = ctx.locale.subscribe(refreshViews)
     const disposeDeveloperTools = ctx.configForms.developerTools.enabled.subscribe(refreshViews)
     return () => {
       disposeDeveloperTools()
       disposeLocale()
-      disposeLinks()
       disposeViews()
     }
   }, 'ui-conversation: View selection')
@@ -412,11 +405,10 @@ export function apply(ctx: Context, config: Config = Config({})): void {
       'conversation.session.header.actions': { kind: 'list', scope: 'session' },
       'conversation.session.header.utilities': { kind: 'list', scope: 'session' },
       'conversation.session.header.corner': { kind: 'single', scope: 'session' },
-      'conversation.session.header.links': { kind: 'list', scope: 'session' },
     },
     store: conversationStore,
     inject: (sessionId: SessionId, actions: BoundActions<typeof conversationStore>): ConversationSessionHeaderInjected => ({
-      hooks: { conversationViews, conversationHeaderLinks },
+      hooks: { conversationViews },
       open: (id) => { workspaceNavigation.openSession(id) },
       selectView: (view) => {
         activateView(sessionId, view)

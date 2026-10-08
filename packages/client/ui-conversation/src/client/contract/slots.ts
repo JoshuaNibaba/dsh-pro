@@ -164,16 +164,6 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       scope: 'session'
       owner: ConversationHeaderActionOwnerProps
     }
-    /**
-     * Navigation entries after the View tabs, in ascending order. Each entry
-     * leaves the Conversation instead of selecting a View; registering one
-     * shows the tab row even while only one View exists.
-     */
-    'conversation.session.header.links': {
-      kind: 'list'
-      scope: 'session'
-      owner: ConversationHeaderLinkOwnerProps
-    }
     /** Global navigation before the Session title, available without a Session. */
     'conversation.header.leading': {
       kind: 'single'
@@ -292,12 +282,6 @@ export interface ConversationHeaderActionOwnerProps {
   children?: never
 }
 
-/** A header link renders its own button and derives its state from standard Session props. */
-export interface ConversationHeaderLinkOwnerProps {
-  /** Class that gives the entry's own button the unselected View tab appearance. */
-  readonly className: string
-}
-
 /** The header corner's occupant derives its state from standard Session props. */
 export interface ConversationHeaderCornerOwnerProps {
   /** Marker field: the occupant receives no owner-specific values. */
@@ -364,12 +348,8 @@ export interface ConversationSessionInjected {
 
 /** Business callbacks injected into the strict Session header. */
 export interface ConversationSessionHeaderInjected {
-  readonly hooks: {
-    /** Package-owned View roster source bound only for the Conversation header. */
-    readonly conversationViews: ObservableSnapshot<readonly ViewTab[]>
-    /** Count of registered `conversation.session.header.links` entries. */
-    readonly conversationHeaderLinks: ObservableSnapshot<number>
-  }
+  /** Package-owned View roster source bound only for the Conversation header. */
+  readonly hooks: { readonly conversationViews: ObservableSnapshot<readonly ViewTab[]> }
   /** Select a Session through the Session Controller. */
   open: (sessionId: SessionId) => void
   /** Select and activate one registered Conversation View. */
@@ -523,7 +503,6 @@ export type ConversationSessionHeaderSlotProps =
     | 'conversation.session.header.actions'
     | 'conversation.session.header.utilities'
     | 'conversation.session.header.corner'
-    | 'conversation.session.header.links'
   >
   & PropsStore<ConversationStore>
   & InjectFace<ConversationSessionHeaderInjected>

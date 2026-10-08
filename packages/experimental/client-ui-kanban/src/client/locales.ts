@@ -6,12 +6,9 @@ export const NS = 'kanban'
 
 /** Chinese dictionary and key source. */
 export const zh = {
-  panel: '看板',
-  'header.link': '任务看板',
   title: '看板',
-  'workspace.label': '工作区',
-  'workspace.none': '没有工作区',
-  'workspace.choose': '选择工作区',
+  'view.tab': '任务看板',
+  'workspace.none': '这个会话不属于任何工作区',
   'column.plan': '计划池',
   'column.run': '执行池',
   'column.done': '已完成',
@@ -72,12 +69,9 @@ export type KanbanKey = keyof typeof zh
 
 /** English dictionary. */
 export const en: Record<KanbanKey, string> = {
-  panel: 'Kanban',
-  'header.link': 'Kanban board',
   title: 'Kanban',
-  'workspace.label': 'Workspace',
-  'workspace.none': 'No workspace',
-  'workspace.choose': 'Choose workspace',
+  'view.tab': 'Kanban board',
+  'workspace.none': 'This session belongs to no workspace',
   'column.plan': 'Plan',
   'column.run': 'Run',
   'column.done': 'Done',

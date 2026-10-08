@@ -4,7 +4,7 @@ import kanbanRemote from '@deepseek-ai/dsh-experimental-kanban/remote'
 import { mountKanban } from './mount.ts'
 
 export { inject } from './mount.ts'
-export type { KanbanInjected, KanbanPageProps, KanbanActionResult } from './KanbanPage.tsx'
+export type { KanbanInjected, KanbanViewProps, KanbanActionResult } from './KanbanView.tsx'
 export type { KanbanKey } from './locales.ts'
 
 /**

@@ -25,7 +25,7 @@ This optional bundle inserts the two Kanban rows the shipped Web composition lea
 <a id="use-this-package"></a>
 ## Use this package
 
-Open Plugins in the Web sidebar and enable Kanban, marked by a three-column icon. The sidebar then gains a Kanban entry whose page plans tasks per Workspace and queues them on Session lanes; the [page README](../client-ui-kanban/README.md) describes the board and the [service README](../kanban/README.md) the dispatch rules. Disabling the bundle stops dispatch; stored tasks remain on disk.
+Open Plugins in the Web sidebar and enable Kanban, marked by a three-column icon. Every started Session then gains a **Kanban board** tab beside Chat and Trajectory that plans tasks for the Session's Workspace and queues them on Session lanes; the [View README](../client-ui-kanban/README.md) describes the board and the [service README](../kanban/README.md) the dispatch rules. Disabling the bundle stops dispatch; stored tasks remain on disk.
 
 -----
 
@@ -53,7 +53,7 @@ Open Plugins in the Web sidebar and enable Kanban, marked by a three-column icon
 ## Further Exploration
 
 - [Kanban service](../kanban/README.md) — storage, dispatch, and the Remote namespace.
-- [Kanban page](../client-ui-kanban/README.md) — the browser board.
+- [Kanban View](../client-ui-kanban/README.md) — the browser board.
 
 -----
 
@@ -78,7 +78,7 @@ Sent tasks append to conversation history and do not change the request prefix.
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- While the bundle is on, its page offers a switch per row. The two rows work only together: switching `kanban` off leaves the page without its Remote namespace.
+- While the bundle is on, its page offers a switch per row. The two rows work only together: switching `kanban` off leaves the View without its Remote namespace.
 
 -----
 

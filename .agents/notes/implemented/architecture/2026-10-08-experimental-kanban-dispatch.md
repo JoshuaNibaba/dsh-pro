@@ -24,4 +24,4 @@ Queuing every lane task in the Session inbox with `followup()` reuses the existi
 
 A message the user sends while a task's Turn runs joins that Turn, and the Turn's outcome counts for the task. Running-task facts live in memory, so a Host restart marks running tasks `interrupted` instead of reconciling them with the Session log. Lane tasks cannot be reordered after they are queued.
 
-Verification covers the pure board transitions, real agent-loop dispatch, failure pause, retry and skip, attention marking, archive withdrawal, restart recovery, the browser page, and an assembled Web scenario that drags a task onto a lane and observes it completed.
+Verification covers the pure board transitions, real agent-loop dispatch, failure pause, retry and skip, attention marking, archive withdrawal, restart recovery, the Conversation View tab, and an assembled Web scenario that drags a task onto a lane and observes it completed.

@@ -200,11 +200,6 @@ button.crumb:hover {
   padding-left: 8px;
 }
 
-/* The View tabs keep the strip's spacing; header links follow them. */
-.tabList {
-  display: contents;
-}
-
 /* figma .Tab 34:11442: 13/16 text (figma wt510, rendered 500). The 2px bar
    reaches 1px past the tab's box to end flush with the header's bottom edge,
    sitting over the rule. */

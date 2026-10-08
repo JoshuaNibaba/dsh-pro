@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-此实验性 Host 服务为每个工作区保存一个看板，并把用户排在某个会话泳道上的任务逐个发送给该会话，每个任务占一个 Turn。认领任务消息的 Turn 以 `completed` 结束时任务完成；其他结束原因使任务失败并暂停该泳道，直到用户重试、跳过或撤回该任务。浏览器页面位于 [client-ui-kanban](../client-ui-kanban/README.zh.md)，[kanban-bundle](../kanban-bundle/README.zh.md) 负责同时启用两者。
+此实验性 Host 服务为每个工作区保存一个看板，并把用户排在某个会话泳道上的任务逐个发送给该会话，每个任务占一个 Turn。认领任务消息的 Turn 以 `completed` 结束时任务完成；其他结束原因使任务失败并暂停该泳道，直到用户重试、跳过或撤回该任务。会话视图标签位于 [client-ui-kanban](../client-ui-kanban/README.zh.md)，[kanban-bundle](../kanban-bundle/README.zh.md) 负责同时启用两者。
 
 ## 目录
 
