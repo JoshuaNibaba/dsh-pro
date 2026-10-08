@@ -101,7 +101,7 @@ Run these commands from the root of the DSH Pro repository:
 ./remote/mac/build.sh --no-install  # only package remote/mac/build/DSH-Remote.zip
 ```
 
-On every push to `custom` that changes `remote/mac/`, GitHub Actions ([`.github/workflows/dsh-remote-mac.yml`](../.github/workflows/dsh-remote-mac.yml)) builds on macOS and updates the fixed release `dsh-remote`: it replaces `DSH-Remote.zip` and `DSH-Remote.version`, which records the build number, and moves the tag to the built commit. That release is never marked Latest and does not affect DSH Pro's own `custom-v*` releases. The client's updater reads `DSH-Remote.version` and offers an update when the build number exceeds its own. In a fork, the built client checks for updates in your own repository.
+On every push to `custom` that changes `remote/mac/`, GitHub Actions ([`.github/workflows/dsh-remote-mac.yml`](../.github/workflows/dsh-remote-mac.yml)) builds on macOS and updates the fixed release `dsh-remote`: it replaces `DSH-Remote.zip` and `DSH-Remote.version`, which records the build number, and moves the tag to the built commit. Each build replaces the assets in that one release, so DSH Pro's own `custom-v*` releases stay separate. The client's updater reads `DSH-Remote.version` and offers an update when the build number exceeds its own. In a fork, the built client checks for updates in your own repository.
 
 Besides retry and process-lifecycle tests, macOS CI starts a temporary loopback-only `sshd` with temporary keys to verify that the first connection and a reconnection each authenticate once, and covers the overall command timeout, cancellation while running, both output streams exceeding the pipe capacity, and parsing the login address next to a shell prompt.
 

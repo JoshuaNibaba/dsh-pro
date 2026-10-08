@@ -101,7 +101,7 @@ Mac 客户端的 SSH 隧道会自动恢复,不需要安装 `autossh`:每 10 秒�
 ./remote/mac/build.sh --no-install  # only package remote/mac/build/DSH-Remote.zip
 ```
 
-每次推送到 `custom` 且修改了 `remote/mac/` 时,GitHub Actions([`.github/workflows/dsh-remote-mac.yml`](../.github/workflows/dsh-remote-mac.yml))在 macOS 上编译，并更新固定的 release `dsh-remote`:替换其中的 `DSH-Remote.zip` 和记录构建号的 `DSH-Remote.version`,标签移到本次提交。该 release 不标记为 Latest,不影响 DSH Pro 自身的 `custom-v*` 发布。客户端的自动更新读取 `DSH-Remote.version`,构建号大于本机版本时提示更新。Fork 仓库后，构建出的客户端会从你自己的仓库检查更新。
+每次推送到 `custom` 且修改了 `remote/mac/` 时,GitHub Actions([`.github/workflows/dsh-remote-mac.yml`](../.github/workflows/dsh-remote-mac.yml))在 macOS 上编译，并更新固定的 release `dsh-remote`:替换其中的 `DSH-Remote.zip` 和记录构建号的 `DSH-Remote.version`,标签移到本次提交。每次构建都替换这一个 release 中的文件，与 DSH Pro 自身的 `custom-v*` 发布互不影响。客户端的自动更新读取 `DSH-Remote.version`,构建号大于本机版本时提示更新。Fork 仓库后，构建出的客户端会从你自己的仓库检查更新。
 
 macOS CI 除了重试与进程生命周期测试,还启动仅监听回环地址的临时 `sshd`,使用临时密钥验证首次连接和重连各只认证一次,并覆盖命令总超时、执行中取消、双输出流大于管道容量及带 shell 提示的登录地址解析。
 
