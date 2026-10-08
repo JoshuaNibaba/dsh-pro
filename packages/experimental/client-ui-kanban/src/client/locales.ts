@@ -7,6 +7,7 @@ export const NS = 'kanban'
 /** Chinese dictionary and key source. */
 export const zh = {
   panel: '看板',
+  'header.link': '任务看板',
   title: '看板',
   'workspace.label': '工作区',
   'workspace.none': '没有工作区',
@@ -72,6 +73,7 @@ export type KanbanKey = keyof typeof zh
 /** English dictionary. */
 export const en: Record<KanbanKey, string> = {
   panel: 'Kanban',
+  'header.link': 'Kanban board',
   title: 'Kanban',
   'workspace.label': 'Workspace',
   'workspace.none': 'No workspace',

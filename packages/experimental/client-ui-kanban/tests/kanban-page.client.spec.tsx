@@ -7,6 +7,7 @@ import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { BoardSnapshot } from '../src/client/board-source.ts'
+import { KanbanHeaderLink } from '../src/client/KanbanHeaderLink.tsx'
 import { KanbanIcon } from '../src/client/KanbanIcon.tsx'
 import { KanbanPage } from '../src/client/KanbanPage.tsx'
 import { en } from '../src/client/locales.ts'
@@ -275,5 +276,14 @@ describe('KanbanPage', () => {
   it('renders the sidebar glyph at the requested size', () => {
     const { container } = render(<KanbanIcon {...{ size: 18 } as Parameters<typeof KanbanIcon>[0]} />)
     expect(container.querySelector('svg')?.getAttribute('width')).toBe('18')
+  })
+
+  it('renders the header link with the owner class and opens the board for its Session', () => {
+    const openBoard = vi.fn()
+    render(<KanbanHeaderLink {...{ className: 'tab', sessionId: S1, openBoard, t } as Parameters<typeof KanbanHeaderLink>[0]} />)
+    const link = screen.getByRole('button', { name: en['header.link'] })
+    expect(link.className).toBe('tab')
+    fireEvent.click(link)
+    expect(openBoard).toHaveBeenCalledWith(S1)
   })
 })

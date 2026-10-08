@@ -3,6 +3,8 @@ import type { Context } from '@deepseek-ai/cordis'
 import { RemoteStreamCarrierError } from '@deepseek-ai/dsh-api-gateway/client'
 import type {} from '@deepseek-ai/dsh-api-remotes/client'
 import type {} from '@deepseek-ai/dsh-api-session-controller/client'
+import type {} from '@deepseek-ai/dsh-api-workspace-controller/client'
+import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type { MainPanelId } from '@deepseek-ai/dsh-client-ui-layout/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
@@ -12,6 +14,7 @@ import type {} from '@deepseek-ai/dsh-experimental-kanban/remote'
 import type { KanbanBoard } from '@deepseek-ai/dsh-experimental-kanban/types'
 import type { RemoteResult, TypertRemoteContribution } from '@deepseek-ai/dsh-typert-protocol'
 import { createBoardSource } from './board-source.ts'
+import { KanbanHeaderLink, type KanbanHeaderLinkInjected } from './KanbanHeaderLink.tsx'
 import { KanbanIcon } from './KanbanIcon.tsx'
 import { KanbanPage, type KanbanActionResult, type KanbanInjected } from './KanbanPage.tsx'
 import { en, NS, zh, type KanbanKey } from './locales.ts'
@@ -27,7 +30,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 const PANEL_ID = 'kanban' as MainPanelId
 
 /** Browser services the page and its Remote calls require. */
-export const inject = ['remote', 'slots', 'locale', 'sessions', 'uiWorkspace']
+export const inject = ['remote', 'slots', 'locale', 'sessions', 'uiWorkspace', 'workspaces', 'layout']
 
 const outcome = async (call: Promise<RemoteResult<unknown>>): Promise<KanbanActionResult> => {
   const result = await call
@@ -72,10 +75,20 @@ function registerUi(ctx: Context): void {
     },
     openSession: (sessionId) => { ctx.uiWorkspace.openSession(sessionId) },
   }
+  const link: KanbanHeaderLinkInjected = {
+    openBoard: (sessionId) => {
+      const owner = ctx.workspaces.list.getSnapshot().items.find(item => item.sessionIds.includes(sessionId))
+      if (owner !== undefined) injected.selectWorkspace(owner.workspaceId)
+      ctx.layout.selectPanel(PANEL_ID)
+    },
+  }
 
   ctx.slots.inject('main', () => ctx.slots.register({
     name: 'main', key: PANEL_ID, locale: NS, inject: () => injected,
   }, KanbanPage))
+  ctx.slots.inject('conversation.session.header.links', () => ctx.slots.register({
+    name: 'conversation.session.header.links', id: 'kanban', order: 10, locale: NS, inject: () => link,
+  }, KanbanHeaderLink))
   ctx.slots.inject('sidebar.panellist', () => ctx.slots.register({
     name: 'sidebar.panellist', id: PANEL_ID, order: 11, locale: NS, label: () => t('panel'),
   }, KanbanIcon))
@@ -89,7 +102,7 @@ function registerUi(ctx: Context): void {
  */
 export async function mountKanban(ctx: Context, contribution: TypertRemoteContribution): Promise<() => Promise<void>> {
   const disposeRemote = await ctx.remote.$mount(contribution)
-  const ui = ctx.inject(['remote.kanban', 'slots', 'locale', 'sessions', 'uiWorkspace'], registerUi)
+  const ui = ctx.inject(['remote.kanban', 'slots', 'locale', 'sessions', 'uiWorkspace', 'workspaces', 'layout'], registerUi)
   try { await ui } catch (error) { await ui.dispose(); await disposeRemote(); throw error }
   return async () => { await ui.dispose(); await disposeRemote() }
 }

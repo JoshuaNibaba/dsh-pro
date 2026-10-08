@@ -56,14 +56,15 @@ function equalBreadcrumbs(left: readonly Breadcrumb[], right: readonly Breadcrum
  * @returns Session navigation controls, with title and tabs after conversation starts.
  */
 export function ConversationSessionHeader({
-  sessionId, hideChrome, useSessions, useConversationViews, useStore,
+  sessionId, hideChrome, useSessions, useConversationViews, useConversationHeaderLinks, useStore,
   renderSlot, open, selectView, t,
 }: ConversationSessionHeaderProps) {
   const tabs = useConversationViews(value => value)
   const selectedId = useStore(s => s.view)
   const active = resolveActiveView(tabs, selectedId)
   const ancestry = useSessions(s => deriveAncestry(s, sessionId), equalBreadcrumbs)
-  const showTabs = !hideChrome && tabs.length > 1
+  const links = useConversationHeaderLinks(value => value)
+  const showTabs = !hideChrome && (tabs.length > 1 || links > 0)
   return (
     <>
       <div className={css.titleRow}>
@@ -139,20 +140,24 @@ export function ConversationSessionHeader({
       </div>
       {showTabs && (
         // data-conversation-tabs: marks the tab strip, which the window-chrome
-        // geometry and the browser coverage lane anchor on.
-        <div className={css.tabs} role="tablist" data-conversation-tabs="">
-          {tabs.map(viewTab => (
-            <button
-              key={viewTab.id}
-              type="button"
-              role="tab"
-              aria-selected={viewTab.id === active?.id}
-              className={clsx(css.tab, viewTab.id === active?.id && css.tabActive)}
-              onClick={() => { selectView(viewTab.id) }}
-            >
-              {viewTab.label}
-            </button>
-          ))}
+        // geometry and the browser coverage lane anchor on. Header links sit
+        // after the tablist in the same row; they navigate instead of selecting.
+        <div className={css.tabs} data-conversation-tabs="">
+          <div className={css.tabList} role="tablist">
+            {tabs.map(viewTab => (
+              <button
+                key={viewTab.id}
+                type="button"
+                role="tab"
+                aria-selected={viewTab.id === active?.id}
+                className={clsx(css.tab, viewTab.id === active?.id && css.tabActive)}
+                onClick={() => { selectView(viewTab.id) }}
+              >
+                {viewTab.label}
+              </button>
+            ))}
+          </div>
+          {renderSlot('conversation.session.header.links', { className: clsx(css.tab) })}
         </div>
       )}
     </>

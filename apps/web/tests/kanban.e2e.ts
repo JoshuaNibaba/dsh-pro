@@ -90,6 +90,16 @@ describe('Kanban Web board', () => {
     const sent = handle.agent.session.snapshotEvents().flatMap(event =>
       event.type === 'user/message' && event.data.source.kind === 'kanban' ? [event.data.content] : [])
     expect(sent).toEqual([[{ type: 'text', text: `${TASK_TITLE}\n\n${TASK_DETAILS}` }]])
+    // The completed card opens its Session; that Session's header links back to the board.
+    await done.getByRole('button', { name: 'Open session', exact: true }).click()
+    const headerLink = page.locator('[data-conversation-tabs] [data-kanban-header-link]')
+    await headerLink.waitFor()
+    expect(await headerLink.innerText()).toBe('Kanban board')
+    const headerShot = process.env['DSH_KANBAN_HEADER_SCREENSHOT']
+    if (headerShot !== undefined) await page.screenshot({ path: headerShot })
+    await headerLink.click()
+    await board.waitFor()
+    await done.waitFor()
     const shot = process.env['DSH_KANBAN_SCREENSHOT']
     if (shot !== undefined) await page.screenshot({ path: shot })
     expect(tripwire.pageErrors).toEqual([])

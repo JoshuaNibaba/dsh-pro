@@ -32,7 +32,8 @@ import { InputBar } from '../src/client/skeleton/InputBar.tsx'
 import type { InputBarProps } from '../src/client/skeleton/InputBar.tsx'
 import type {
   ComposerBarOwnerProps, ConversationContentInputProps, ConversationContentProps,
-  ConversationHeaderLineageOwnerProps, ConversationSessionHeaderSlotProps, ConversationSessionSlotProps, ConversationSlotProps,
+  ConversationHeaderLineageOwnerProps, ConversationHeaderLinkOwnerProps, ConversationSessionHeaderSlotProps,
+  ConversationSessionSlotProps, ConversationSlotProps,
   ConversationViewsProps,
 } from '../src/client/contract/slots.ts'
 import type { ViewTab } from '../src/client/contract/views.ts'
@@ -140,6 +141,8 @@ function mount(
     composerBlock?: { reason: string }
     /** Mutable view ledger used by registration-order regressions. */
     viewTabs?: ViewTab[]
+    /** Registered header link entries; each renders one link button. */
+    headerLinks?: number
   } = {},
 ) {
   const sessionId = 'sessionId' in options ? options.sessionId : SID
@@ -189,6 +192,7 @@ function mount(
     { id: 'trajectory', label: 'Trajectory' },
   ]
   const useConversationViews: SessionSlotProps['useConversationViews'] = selector => selector(viewTabs)
+  const headerLinks = options.headerLinks ?? 0
   /** Owner share handed to the two composer tool-row seats, per render. */
   const seatOwners: { key: string; owner: unknown }[] = []
   let pickerOwner: unknown
@@ -202,6 +206,10 @@ function mount(
       lineageOwners.push(owner as ConversationHeaderLineageOwnerProps)
       return opts?.fallback ?? null
     }
+    if (key === 'conversation.session.header.links') {
+      const { className } = owner as ConversationHeaderLinkOwnerProps
+      return headerLinks === 0 ? null : <button type="button" className={className}>Board</button>
+    }
     if (key === 'conversation.header') {
       return <ConversationHeader {...runtimeProps} renderSlot={renderSlot as never} />
     }
@@ -214,6 +222,7 @@ function mount(
           useSession={useSession}
           useConversation={useConversation}
           useConversationViews={useConversationViews}
+          useConversationHeaderLinks={selector => selector(headerLinks)}
           useChat={useChat}
           useTrajectory={useTrajectory}
           useSessions={props.useSessions}
@@ -654,7 +663,20 @@ describe('ConversationRoot resident composer', () => {
     expect(b.view.getByRole('tab', { name: 'Chat' }).getAttribute('aria-selected')).toBe('true')
     expect(b.view.getByRole('tab', { name: 'New view' }).getAttribute('aria-selected')).toBe('false')
     // The browser drag lane anchors its header tab-strip probe on this marker.
-    expect(b.view.getByRole('tablist').hasAttribute('data-conversation-tabs')).toBe(true)
+    expect(b.view.getByRole('tablist').closest('[data-conversation-tabs]')).not.toBeNull()
+  })
+
+  it('shows the tab row for header links beside a single View and keeps them out of the tablist', () => {
+    const lone = mount(sessionSnapshotOf(), undefined, undefined, { viewTabs: [{ id: 'chat', label: 'Chat' }] })
+    expect(lone.view.queryByRole('tablist')).toBeNull()
+    cleanup()
+    const linked = mount(sessionSnapshotOf(), undefined, undefined, { viewTabs: [{ id: 'chat', label: 'Chat' }], headerLinks: 1 })
+    const tablist = linked.view.getByRole('tablist')
+    expect(tablist.querySelectorAll('[role="tab"]')).toHaveLength(1)
+    const link = linked.view.getByRole('button', { name: 'Board' })
+    expect(tablist.contains(link)).toBe(false)
+    expect(link.closest('[data-conversation-tabs]')).not.toBeNull()
+    expect(link.className).toBe(linked.view.getByRole('tab', { name: 'Chat' }).className.split(' ')[0])
   })
 
   it('rolls the pending workspace label back when switching fails', async () => {

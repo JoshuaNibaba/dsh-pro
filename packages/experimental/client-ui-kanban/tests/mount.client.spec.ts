@@ -10,6 +10,7 @@ import { RemoteError, type TypertRemoteContribution } from '@deepseek-ai/dsh-typ
 import type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
 import { expect, it, vi } from 'vitest'
 import type { BoardSnapshot } from '../src/client/board-source.ts'
+import { KanbanHeaderLink, type KanbanHeaderLinkInjected } from '../src/client/KanbanHeaderLink.tsx'
 import { KanbanIcon } from '../src/client/KanbanIcon.tsx'
 import { KanbanPage, type KanbanInjected } from '../src/client/KanbanPage.tsx'
 import { inject, mountKanban } from '../src/client/mount.ts'
@@ -19,6 +20,11 @@ import { apply as hostApply } from '../src/index.ts'
 function assertInjected(value: Record<string, unknown>): asserts value is Record<string, unknown> & KanbanInjected {
   expect(typeof value.selectWorkspace).toBe('function')
   expect(typeof value.hooks).toBe('object')
+}
+
+/** Narrow the erased header-link payload. */
+function assertLink(value: Record<string, unknown>): asserts value is Record<string, unknown> & KanbanHeaderLinkInjected {
+  expect(typeof value.openBoard).toBe('function')
 }
 
 const REMOTE: TypertRemoteContribution = { package: '@deepseek-ai/dsh-experimental-kanban', descriptors: [] }
@@ -57,14 +63,18 @@ async function fixture(fail = false) {
   ctx.provide('sessions', { create })
   const openSession = vi.fn()
   ctx.provide('uiWorkspace', { openSession })
+  ctx.provide('workspaces', { list: { getSnapshot: () => ({ items: [{ workspaceId: brandString<WorkspaceId>('ws-2'), sessionIds: [S1] }] }) } })
+  const selectPanel = vi.fn()
+  ctx.provide('layout', { selectPanel })
   ctx.provide('locale', new LocaleRuntime(ctx))
   await ctx.plugin(SlotRegistry)
   ctx.slots.register({ name: 'root', children: {
     main: { kind: 'keyed', scope: 'root' },
     'sidebar.panellist': { kind: 'list', scope: 'root' },
+    'conversation.session.header.links': { kind: 'list', scope: 'session' },
   } } as never, () => null)
   if (fail) vi.spyOn(ctx.slots, 'inject').mockImplementationOnce(() => { throw new Error('slot failed') })
-  return { ctx, unmount, kanban, create, openSession, streams }
+  return { ctx, unmount, kanban, create, openSession, streams, selectPanel }
 }
 
 it('registers the page and sidebar entry, forwards actions, and withdraws everything on disposal', async () => {
@@ -109,9 +119,21 @@ it('registers the page and sidebar entry, forwards actions, and withdraws everyt
     await expect(actions.newSession(WS)).resolves.toEqual({ ok: false, message: 'text' })
     actions.openSession(S1)
     expect(b.openSession).toHaveBeenCalledWith(S1)
+    const linkEntry = b.ctx.slots.entries('conversation.session.header.links').find(item => item.component === KanbanHeaderLink)!
+    expect(linkEntry).toMatchObject({ locale: 'kanban' })
+    const link = linkEntry.inject!()
+    assertLink(link)
+    link.openBoard(S1)
+    expect(actions.hooks.view.getSnapshot().workspaceId).toBe('ws-2')
+    expect(b.selectPanel).toHaveBeenLastCalledWith('kanban')
+    actions.selectWorkspace(WS)
+    link.openBoard(brandString<SessionId>('elsewhere'))
+    expect(actions.hooks.view.getSnapshot().workspaceId).toBe(WS)
+    expect(b.selectPanel).toHaveBeenCalledTimes(2)
     await fiber.dispose()
     expect(b.ctx.slots.entries('main')).toHaveLength(0)
     expect(b.ctx.slots.entries('sidebar.panellist')).toHaveLength(0)
+    expect(b.ctx.slots.entries('conversation.session.header.links')).toHaveLength(0)
     expect(b.unmount).toHaveBeenCalledOnce()
   } finally { await b.ctx.fiber.dispose() }
 })
