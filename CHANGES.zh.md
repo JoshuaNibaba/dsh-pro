@@ -129,6 +129,12 @@ Anthropic 使用 `web_search_20250305`；OpenAI Responses、Azure Responses、Co
 
 [HMR 浏览器半侧](https://github.com/JoshuaNibaba/dsh-pro/blob/custom/packages/client/hmr/src/client/index.ts)把每次（重新）连接 `/plugins/events` 后收到的第一张图与 `ctx.modules.manifest.rev` 比较，不同时调用 `location.reload()`。官方版本在这帧上原地替换所有变化的插件；重新部署后多个插件同时变化，`SlotAssemblyError` 逃出渲染器，React 根节点卸载，页面白屏。连接期间收到的图变化和重建仍实时应用。合并时保留 `open` 时重置的 `opening` 标志、revision 比较和 `internals.reloadPage` 替换点；[transport 测试](https://github.com/JoshuaNibaba/dsh-pro/blob/custom/packages/client/hmr/tests/transport.client.spec.ts)覆盖它们。
 
+### 10. 任务看板与仅 Chat 显示输入框
+
+实验性的[看板服务](https://github.com/JoshuaNibaba/dsh-pro/blob/custom/packages/experimental/kanban/README.zh.md)、[视图](https://github.com/JoshuaNibaba/dsh-pro/blob/custom/packages/experimental/client-ui-kanban/README.zh.md)和[bundle](https://github.com/JoshuaNibaba/dsh-pro/blob/custom/packages/experimental/kanban-bundle/README.zh.md)只存在于本 fork：按工作区保存任务的看板，Host 调度器让每条会话泳道每个 Turn 执行一个任务，界面是与“对话”“轨迹”并列的 `kanban` 会话视图标签。它们对共享文件的改动只有注册：`packages/boot/app-boot/src/profile.ts` 的 `OPTIONAL_BUNDLES`、`apps/cli` 依赖、根 tsconfig 的路径与引用、`scripts/gen-cordis-catalog.ts` 的 `SERVICE_PAGE` 与类型页面、`scripts/gen-doc-graphs.ts` 的角色、模型体验条目、发布家族列表、`kanban` 子系统页，以及[仅用于归属的 `kanban` 消息来源记录](https://github.com/JoshuaNibaba/dsh-pro/blob/custom/docs/persistence-changes/2026-10-08-kanban-message-source.zh.md)。带有该来源的 Session 日志会被没有这条记录的构建拒绝，回滚到官方版本时必须考虑。
+
+输入框只属于 Chat：[DefaultConversationViews](https://github.com/JoshuaNibaba/dsh-pro/blob/custom/packages/client/ui-conversation/src/client/skeleton/DefaultConversationViews.tsx) 用 `data-conversation-view` 标明当前视图，[ConversationRoot.module.css](https://github.com/JoshuaNibaba/dsh-pro/blob/custom/packages/client/ui-conversation/src/client/skeleton/ConversationRoot.module.css) 在选中其他视图时隐藏 `.composerSeat`。官方版本在所有视图下都显示输入框。合并时保留该属性和样式规则；[skeleton 测试](https://github.com/JoshuaNibaba/dsh-pro/blob/custom/packages/client/ui-conversation/tests/skeleton.client.spec.tsx)、[看板 Web 场景](https://github.com/JoshuaNibaba/dsh-pro/blob/custom/apps/web/tests/kanban.e2e.ts)和 [auto-review-denial](https://github.com/JoshuaNibaba/dsh-pro/blob/custom/snapshots/web/auto-review-denial/ui.expected.md) 中的轨迹 golden 覆盖它们。
+
 <a id="conflicts"></a>
 ## 冲突与生成文件
 

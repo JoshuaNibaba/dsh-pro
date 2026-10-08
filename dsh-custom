@@ -48,6 +48,10 @@ CUSTOM_TESTS=(
   packages/client/ui-sidebar-files
   packages/client/ui-layout
   packages/client/hmr
+  packages/experimental/kanban
+  packages/experimental/kanban-bundle
+  packages/experimental/client-ui-kanban
+  packages/client/ui-conversation/tests/skeleton.client.spec.tsx
 )
 
 die() { echo "dsh-custom: $*" >&2; exit 1; }
