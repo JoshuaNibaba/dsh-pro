@@ -1,0 +1,323 @@
+#!/usr/bin/env bash
+# dsh-custom: keep the public fork branch `custom` following official releases and
+# deploy it on this machine. Lives on the orphan `deploy` branch (see README.md
+# beside it); the product source is the repository's main worktree.
+set -euo pipefail
+
+TOOLS="$(dirname "$(readlink -f "$0")")"
+REPO="$(git -C "$TOOLS" worktree list --porcelain | sed -n '1s/^worktree //p')"
+cd "$REPO"
+BRANCH=custom
+UPSTREAM=upstream
+STATE="$HOME/.dsh-custom"          # release slots and the trial DSH_HOME
+LINK="$HOME/.dsh-remote/dsh-bin"   # run-web.sh starts this instead of the npm dsh when present
+SERVICE=dsh-web
+
+# Files generated from source. On a sync conflict the official version is taken
+# (in the merge "theirs" is the official release) and `regen` rebuilds them from
+# the merged source.
+GENERATED=(
+  pnpm-lock.yaml
+  THIRD_PARTY_NOTICES.md
+  'docs/persistence-catalog.*'
+  docs/persistence-schema.json
+  'docs/persistence-changes/historical-formats/README.*'
+  'docs/config-catalog.*'
+  packages/core/session/src/known-event-types.ts
+  packages/extensions/tool-cordis/src/api-catalog.ts
+)
+
+# Tests that cover the local changes; sync and resume run them before building.
+CUSTOM_TESTS=(
+  packages/llm/llm-pi-ai/tests/web-search.spec.ts
+  packages/web/web-search-model
+  packages/web/tool-web
+  packages/api/gateway/tests/stream-server.host.spec.ts
+  packages/api/gateway/tests/gateway-stream.host.spec.ts
+  packages/api/session-controller/tests/session.client.spec.ts
+  packages/api/session-controller/tests/manager.client.spec.ts
+  packages/api/session-controller/tests/session-history-journal.host.spec.ts
+  packages/api/session-controller/tests/transport.host.spec.ts
+  packages/client/ui-chat/tests/chat-view.client.spec.tsx
+  packages/host/frontend-static
+  packages/bundle/web-app/tests/web-app.spec.ts
+  packages/client/ui-sidebar-files
+  packages/client/ui-layout
+)
+
+die() { echo "dsh-custom: $*" >&2; exit 1; }
+say() { printf '\n==> %s\n' "$*"; }
+
+# The newest official release merged into this branch.
+base_tag() { git describe --tags --abbrev=0 --match 'dsh-v*' "$BRANCH"; }
+
+# Official release to follow: an explicit dsh-v* tag, or an npm channel (default latest).
+target_tag() {
+  local want="${1:-latest}"
+  if [[ "$want" == dsh-v* ]]; then echo "$want"; return; fi
+  local v; v="$(npm view @deepseek-ai/dsh "dist-tags.$want" 2>/dev/null)" || true
+  [ -n "$v" ] || die "npm 频道 '$want' 不存在(可用:latest, next, alpha,或直接给 dsh-v<版本> 标签)"
+  echo "dsh-v$v"
+}
+
+merging() { git rev-parse -q --verify MERGE_HEAD >/dev/null; }
+
+require_clean() {
+  [ -z "$(git status --porcelain --untracked-files=no)" ] || die "工作区有未提交的修改，请先提交或 git stash"
+  ! merging || die "上一次同步尚未完成:解决冲突后运行 dsh-custom resume,或 git merge --abort 放弃"
+}
+
+is_generated() {
+  local f="$1" p
+  for p in "${GENERATED[@]}"; do
+    # shellcheck disable=SC2053 # pattern match is intended
+    [[ "$f" == $p ]] && return 0
+  done
+  return 1
+}
+
+# Resolve conflicts in generated files with the official version and commit the
+# merge. Stops with instructions when a hand-written file still conflicts.
+continue_merge() {
+  local f manual=()
+  while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    if is_generated "$f"; then
+      if git cat-file -e ":3:$f" 2>/dev/null; then git checkout --theirs -- "$f"; git add -- "$f"
+      else git rm -q -- "$f"; fi
+      echo "  自动解决(采用官方版本，稍后重新生成): $f"
+    else
+      manual+=("$f")
+    fi
+  done < <(git diff --name-only --diff-filter=U)
+  if [ "${#manual[@]}" -gt 0 ]; then
+    cat >&2 <<EOF
+
+dsh-custom: 这些文件需要手动合并(ours = $BRANCH,theirs = 官方版本):
+$(printf '  %s\n' "${manual[@]}")
+
+  编辑文件，保留官方的改动并重新加上本地的改动 → git add <文件>
+  然后运行:dsh-custom resume      (提交合并、重新生成、测试、构建、推送)
+  放弃本次同步:git merge --abort   (分支回到同步前，备份在 backup/custom-*)
+  rerere 会自动套用以前解决过的同样冲突。
+EOF
+    exit 1
+  fi
+  git commit -q --no-edit --no-verify
+}
+
+# Rebuild generated files from the merged source and commit any change.
+cmd_regen() {
+  ! merging || die "同步尚未完成，请先运行 dsh-custom resume"
+  say "重新生成锁文件与生成文件"
+  pnpm install --lockfile-only
+  CI=true pnpm install --frozen-lockfile
+  pnpm run gen-persistence-catalog
+  pnpm run verify-persistence-formats --write
+  pnpm run gen-config-catalog
+  pnpm run gen-cordis-catalog
+  pnpm run gen-third-party-notices
+  if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
+    git add -u
+    git commit -q --no-verify -m "custom: regenerate generated files for $(base_tag)"
+    echo "已提交:$(git log -1 --format='%h %s')"
+  else
+    echo "生成文件已是最新"
+  fi
+  pnpm run verify-persistence-changes \
+    || die "持久化类型记录与官方新基线不一致：按 docs/cookbook/reviewing-persistence-type-changes.md 重新记录本地事件"
+}
+
+cmd_check() {
+  say "运行本地修改的测试"
+  pnpm exec vitest run "${CUSTOM_TESTS[@]}"
+}
+
+# Build output (lib/) is untracked, so files from another DSH version survive a
+# checkout and break the build; start clean whenever the built version differs.
+build() {
+  local dir="${1:-.}" built want
+  built="$(sed -nE 's/.*"DSH_CLIENT_VERSION": *"([^"]*)".*/\1/p' "$dir/.dsh-build/client-build-environment.json" 2>/dev/null || true)"
+  want="$(cd "$dir" && node -p 'require("./apps/cli/package.json").version')"
+  say "pnpm install ($(git -C "$dir" describe --tags --always))"
+  (cd "$dir" && CI=true pnpm install --frozen-lockfile)
+  if [ "$built" != "$want" ]; then
+    say "pnpm run clean (构建产物是 ${built:-无},源码是 $want)"
+    (cd "$dir" && pnpm run clean)
+  fi
+  say "pnpm run build"
+  (cd "$dir" && pnpm run build)
+}
+
+cmd_status() {
+  local base; base="$(base_tag)"
+  echo "源码目录:  $REPO"
+  echo "分支:      $(git branch --show-current)"
+  echo "官方基线:  $base"
+  echo "官方最新:  $(target_tag latest 2>/dev/null || echo '?')  (npm latest)"
+  echo "官方 alpha: $(target_tag alpha 2>/dev/null || echo '?')"
+  echo "本地修改:  $(git rev-list --count --no-merges "$base..$BRANCH") 个提交"
+  git log --oneline --no-decorate --no-merges "$base..$BRANCH" | sed 's/^/  /'
+  [ -n "$(git status --porcelain)" ] && echo "未提交:    有" || true
+  merging && echo "同步:      进行中(dsh-custom resume 继续)" || true
+  if [ -L "$LINK" ]; then echo "服务运行:  自定义版本 $(readlink "$LINK")"; else echo "服务运行:  官方 npm 版本 ($(dsh --version 2>/dev/null))"; fi
+}
+
+# After the merge: regenerate, test, build, publish. NO_BUILD skips the build.
+finish_sync() {
+  echo "同步完成:$(base_tag)"
+  cmd_regen
+  cmd_check
+  [ "${NO_BUILD:-0}" = 1 ] || build .
+  if git remote get-url origin >/dev/null 2>&1; then
+    say "git push origin $BRANCH"
+    git push origin "$BRANCH"
+  fi
+  echo
+  echo "下一步:dsh-custom deploy;发布给其他人:dsh-custom release"
+}
+
+# Merge an official release into the public branch. Never rewrites history, so
+# people who track the fork can always fast-forward.
+cmd_sync() {
+  local want=""
+  NO_BUILD=0
+  for a in "$@"; do case "$a" in --no-build) NO_BUILD=1 ;; *) want="$a" ;; esac; done
+  require_clean
+  [ "$(git branch --show-current)" = "$BRANCH" ] || git switch -q "$BRANCH"
+  say "git fetch $UPSTREAM / origin"
+  git fetch -q "$UPSTREAM" --tags --prune
+  git fetch -q origin
+  git merge -q --ff-only "origin/$BRANCH" 2>/dev/null || true
+  local base target; base="$(base_tag)"; target="$(target_tag "$want")"
+  git rev-parse -q --verify "refs/tags/$target" >/dev/null || die "上游没有标签 $target"
+  if git merge-base --is-ancestor "$target" "$BRANCH"; then echo "已经包含 $target,无需同步"; return; fi
+  git merge-base --is-ancestor "$base" "$target" || die "$target 不是 $base 的后续版本，合并不能回退版本"
+  local backup; backup="backup/custom-$(date +%Y%m%d-%H%M%S)"
+  git branch -q "$backup" "$BRANCH"
+  say "合并官方 $target 到 $BRANCH(备份分支 $backup)"
+  git merge -q --no-ff --no-verify -m "Merge official release $target into $BRANCH" "$target" || continue_merge
+  finish_sync
+}
+
+cmd_resume() {
+  merging || die "没有进行中的同步"
+  continue_merge
+  NO_BUILD="${NO_BUILD:-0}" finish_sync
+}
+
+# Tag the current public branch as custom-v<official version>.<n> and publish a
+# GitHub Release whose notes list the fork's changes.
+cmd_release() {
+  require_clean
+  command -v gh >/dev/null || die "需要 gh(GitHub CLI)"
+  git fetch -q origin --tags
+  [ "$(git rev-parse "$BRANCH")" = "$(git rev-parse "origin/$BRANCH")" ] || die "$BRANCH 与 origin/$BRANCH 不一致，先推送"
+  local base ver n tag notes
+  base="$(base_tag)"; ver="${base#dsh-v}"
+  n=1; while git rev-parse -q --verify "refs/tags/custom-v$ver.$n" >/dev/null; do n=$((n + 1)); done
+  tag="custom-v$ver.$n"
+  notes="$(mktemp)"
+  {
+    echo "基于官方 [$base](https://github.com/deepseek-ai/deepseek-harness/releases/tag/$base) 的非官方 fork 版本。改动说明见 [FORK.zh.md](https://github.com/$(gh repo view --json nameWithOwner -q .nameWithOwner)/blob/$tag/FORK.zh.md)。"
+    echo
+    echo "## 本 fork 的提交"
+    git log --no-merges --format='- %s (%h)' "$base..$BRANCH"
+  } >"$notes"
+  git tag -a "$tag" -m "$tag (based on $base)" "$BRANCH"
+  git push origin "$tag"
+  gh release create "$tag" --verify-tag --title "$tag" --notes-file "$notes" --prerelease
+  rm -f "$notes"
+}
+
+# A throwaway dsh web on another port with a copy of the live profile, so the
+# running service and its sessions are untouched.
+cmd_try() {
+  local port="${1:-18795}"
+  [ -f apps/cli/lib/bin.js ] || die "尚未构建:dsh-custom build"
+  mkdir -p "$STATE/try/profiles"
+  rm -rf "$STATE/try/profiles/web" && cp -r "$HOME/.dsh/profiles/web" "$STATE/try/profiles/web"
+  echo "试运行 http://127.0.0.1:$port/ (独立数据目录 $STATE/try,Ctrl-C 结束)"
+  echo "从 Mac 访问:ssh -N -L $port:127.0.0.1:$port <服务器>,再打开下面输出的地址(把端口保持为 $port)"
+  DSH_HOME="$STATE/try" exec node apps/cli/lib/bin.js web --no-open --port "$port"
+}
+
+# Starts the build's `dsh web` on a spare port with a copy of the live profile
+# and waits until it serves its launch URL.
+smoke() {
+  local bin="$1" home log pid ok=1
+  home="$(mktemp -d)"; log="$home/out.log"
+  mkdir -p "$home/profiles" && cp -r "$HOME/.dsh/profiles/web" "$home/profiles/web"
+  say "试启动 $(node "$bin" --version 2>/dev/null || echo '?')"
+  DSH_HOME="$home" node "$bin" web --no-open --port 18796 >"$log" 2>&1 & pid=$!
+  for _ in $(seq 120); do
+    grep -q '^dsh web: http' "$log" && { ok=0; break; }
+    kill -0 "$pid" 2>/dev/null || break
+    sleep 1
+  done
+  kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null || true
+  [ "$ok" = 0 ] || sed 's/token=[^ ]*/token=<hidden>/' "$log" | tail -20 >&2
+  rm -rf "${home:?}"
+  return "$ok"
+}
+
+# Build the current custom commit into the idle release slot, then switch the
+# service to it. Two slots, so the running build is never rebuilt in place.
+cmd_deploy() {
+  require_clean
+  [ -f /opt/dsh-remote/run-web.sh ] && grep -q 'dsh-bin' /opt/dsh-remote/run-web.sh \
+    || die "服务的 run-web.sh 还不支持自定义版本:先用 root 重新运行 dsh-remote 的 install.sh"
+  local sha cur slot; sha="$(git rev-parse "$BRANCH")"
+  cur="$(readlink "$LINK" 2>/dev/null || true)"
+  if [[ "$cur" == "$STATE/release-a/"* ]]; then slot="$STATE/release-b"; else slot="$STATE/release-a"; fi
+  mkdir -p "$STATE"
+  if [ -d "$slot/.git" ] || [ -f "$slot/.git" ]; then
+    git -C "$slot" checkout -q --detach "$sha"
+  else
+    git worktree add -q --detach "$slot" "$sha"
+  fi
+  build "$slot"
+  smoke "$slot/apps/cli/lib/bin.js" || die "$slot 的构建结果无法启动 dsh web,服务保持不变"
+  mkdir -p "$(dirname "$LINK")"
+  ln -sfn "$slot/apps/cli/lib/bin.js" "$LINK"
+  say "重启 $SERVICE(当前网页会断开，刷新即可)"
+  sudo -n systemctl restart "$SERVICE"
+  echo "服务已切换到自定义版本 $(git describe --tags "$sha")(上一个版本:${cur:-npm})"
+  [ -z "$cur" ] || echo "回滚:ln -sfn $cur $LINK && sudo systemctl restart $SERVICE"
+}
+
+cmd_undeploy() {
+  [ -L "$LINK" ] || { echo "服务已在使用官方 npm 版本"; return; }
+  rm -f "$LINK"
+  sudo -n systemctl restart "$SERVICE"
+  echo "服务已切换回官方 npm 版本 $(dsh --version)"
+}
+
+case "${1:-status}" in
+  status)   cmd_status ;;
+  sync)     shift; cmd_sync "$@" ;;
+  resume)   cmd_resume ;;
+  regen)    cmd_regen ;;
+  check)    cmd_check ;;
+  build)    build . ;;
+  release)  cmd_release ;;
+  try)      shift; cmd_try "$@" ;;
+  deploy)   cmd_deploy ;;
+  undeploy) cmd_undeploy ;;
+  *) cat <<'EOF'
+用法:dsh-custom <命令>
+  status              当前基线、官方最新版本、本地修改列表、服务运行的版本(默认)
+  sync [频道|标签]    把官方新版本 merge 进 custom(默认 npm latest;也可 alpha / next / dsh-v0.2.1)。
+                      不改写历史；生成文件的冲突自动采用官方版本后重新生成；随后跑本地修改的测试、构建、正常推送
+       --no-build     只同步、重新生成和测试，不构建
+  resume              手动解决冲突后继续同步(之后的步骤同 sync)
+  regen               重新生成锁文件和生成文件，有变化时单独提交
+  check               运行本地修改的测试
+  build               pnpm install + pnpm run build
+  release             给 custom 打 custom-v<官方版本>.<n> 标签并发布 GitHub Release
+  try [端口]          用独立数据目录试运行构建结果(默认 18795),不影响正在运行的服务
+  deploy              构建到备用目录，试启动成功后让 dsh-web 服务改用它
+  undeploy            让服务改回官方 npm 版本
+EOF
+     exit 2 ;;
+esac
