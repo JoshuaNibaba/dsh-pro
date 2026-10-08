@@ -1,4 +1,4 @@
-# dsh fork 维护与部署工具
+# DSH Pro 维护与部署工具
 
 `deploy` 是一个孤立分支(与产品源码没有共同历史),只放维护这个 fork 和在本机部署所用的工具与手册，不进入对外发布的 `custom` 分支。它作为同一仓库的独立工作树检出在 `/home/dsh/workspace/dsh-deploy`,`~/.local/bin/dsh-custom` 链接到这里的脚本。
 
@@ -9,7 +9,7 @@
 | | |
 |---|---|
 | `upstream` | 官方仓库 deepseek-ai/deepseek-harness(只拉取，push 已禁用) |
-| `origin` | 公开 fork JoshuaNibaba/deepseek-harness |
+| `origin` | 公开 fork JoshuaNibaba/dsh-pro |
 | `master` | 官方 master 的镜像，不在上面提交 |
 | `custom` | **对外发布的分支**(fork 默认分支)= 官方发布标签(`dsh-v*`)+ 本 fork 的提交。只用 merge 升级，**不改写历史、不强推** |
 | `feat/*` | 从 `upstream/master` 拉出的通用改进，每个分支一项改动，留待上游开放外部 PR 时提交 |
