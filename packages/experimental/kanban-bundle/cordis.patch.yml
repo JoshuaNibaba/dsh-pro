@@ -1,0 +1,10 @@
+# Experimental Kanban over the shipped Web composition, which carries none of
+# these rows. The Kanban service owns the per-Workspace task boards and sends
+# each lane's tasks to its Session one at a time; `ui-kanban` is the board page.
+
+- insert:
+    - id: kanban
+      name: '@deepseek-ai/dsh-experimental-kanban'
+
+    - id: ui-kanban
+      name: '@deepseek-ai/dsh-experimental-client-ui-kanban'

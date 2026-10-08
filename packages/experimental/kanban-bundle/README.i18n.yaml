@@ -1,0 +1,46 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/experimental/kanban-bundle/README.md
+/:
+  en: 4336018e9392b49a
+  zh: 82769c927d81f031
+/deepseek-ai-dsh-experimental-kanban-bundle:
+  en: b6391b6e82fa2e11
+  zh: e1a19386215ede15
+/deepseek-ai-dsh-experimental-kanban-bundle/summary:
+  en: 7c2236de73e1bb01
+  zh: a8ba0dfa5b7d3457
+/deepseek-ai-dsh-experimental-kanban-bundle/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 364c80ee00a374ff
+/deepseek-ai-dsh-experimental-kanban-bundle/use-this-package:
+  en: 5b8314c19f091770
+  zh: af204db58e1ab87e
+/deepseek-ai-dsh-experimental-kanban-bundle/understand-the-implementation:
+  en: ca350072bbbc8409
+  zh: 490e1bdb1297e9b7
+/deepseek-ai-dsh-experimental-kanban-bundle/further-exploration:
+  en: 46e3d195ea1a006d
+  zh: 0a91bc19ed940a3f
+/deepseek-ai-dsh-experimental-kanban-bundle/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-experimental-kanban-bundle/model-experience/sent-tasks:
+  en: 3fcbe8c4148a5b6b
+  zh: d3a5871471a57999
+/deepseek-ai-dsh-experimental-kanban-bundle/model-experience/sent-tasks/what-the-model-sees:
+  en: 72caf3066109e798
+  zh: 519ed1b70ae765f3
+/deepseek-ai-dsh-experimental-kanban-bundle/model-experience/sent-tasks/token-effect:
+  en: 082846c270144db6
+  zh: cf77bf8618309957
+/deepseek-ai-dsh-experimental-kanban-bundle/model-experience/sent-tasks/kv-cache-effect:
+  en: 06d6e629659a6fee
+  zh: b5a28fd2665b8033
+/deepseek-ai-dsh-experimental-kanban-bundle/known-limitations-and-deferred-work:
+  en: 22c29d165e23b2ec
+  zh: 5131fa05194c0a2e
+/deepseek-ai-dsh-experimental-kanban-bundle/known-limitations-and-deferred-work/dev-note:
+  en: 0225ba087c5266f3
+  zh: 4e706f1b2b984e63

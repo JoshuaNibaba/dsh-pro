@@ -1,0 +1,16 @@
+# Bilingual-pair consistency record for kanban.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/subsystems/kanban.md
+/kanban:
+  en: a0164ae0b2d0408f
+  zh: 6742a4ac91bf8af7
+/kanban/tasks-and-lanes:
+  en: 813e451cb527e95a
+  zh: 4b38308d0d7b8196
+/kanban/dispatch:
+  en: 4586a8ce4135ca75
+  zh: e88c97b435b44a18
+/kanban/design-rationale:
+  en: caa637f4dac8e726
+  zh: 22861aff2347ebd2

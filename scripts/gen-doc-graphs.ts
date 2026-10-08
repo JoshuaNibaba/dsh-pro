@@ -239,6 +239,13 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'Owns append-only Session instances and emits the durable session event feed.',
   },
   {
+    key: 'kanban',
+    pkg: 'experimental-kanban',
+    title: 'Experimental Kanban boards',
+    mode: 'core',
+    note: 'Stores per-Workspace tasks and sends each Session lane one task per Turn.',
+  },
+  {
     key: 'speechController',
     pkg: 'experimental-api-speech-to-text',
     title: 'Experimental transcription Remote',

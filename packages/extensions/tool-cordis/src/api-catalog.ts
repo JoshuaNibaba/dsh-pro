@@ -1362,6 +1362,61 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'kanban',
+    summary: 'Kanban boards with a serialized write queue.',
+    description: 'Kanban boards with a serialized write queue. Reads never resume a Session; dispatch resumes a lane\'s Session through the Session Controller.',
+    methods: [
+      {
+        signature: '@Remote(\'board\') async board(workspaceId: WorkspaceId): Promise<KanbanBoard>',
+        description: 'Read one Workspace board without resuming any Session.',
+        parameters: [{ name: 'workspaceId', description: 'Workspace whose tasks are read.' }],
+        returns: 'every task of the Workspace in board order.',
+      },
+      {
+        signature: '@Remote({ mode: \'stream\' }) async *follow(workspaceId: WorkspaceId, signal: AbortSignal): AsyncIterable<KanbanBoard>',
+        description: 'Follow one Workspace board: the current board first, then the complete board after every committed change. Changes that land while an item is unconsumed coalesce into the next item.',
+        parameters: [{ name: 'workspaceId', description: 'Workspace whose tasks are followed.' }, { name: 'signal', description: 'Client observation lifetime.' }],
+        returns: 'complete board snapshots.',
+      },
+      {
+        signature: '@Remote(\'create\') async create(request: KanbanCreateRequest): Promise<KanbanTask>',
+        description: 'Add one task at the end of a Workspace\'s plan pool.',
+        parameters: [{ name: 'request', description: 'Workspace, title, and instruction.' }],
+        returns: 'the stored task.',
+      },
+      {
+        signature: '@Remote(\'edit\') async edit(request: KanbanEditRequest): Promise<KanbanTask>',
+        description: 'Replace the title and instruction of a draft, waiting, or failed task.',
+        parameters: [{ name: 'request', description: 'task identity and replacement text.' }],
+        returns: 'the stored task.',
+      },
+      {
+        signature: '@Remote(\'move\') async move(request: KanbanMoveRequest): Promise<KanbanTask>',
+        description: 'Move a draft, waiting, or failed task within the plan pool, back to it, or to the end of a lane. A task moved to a lane is sent when the lane reaches it.',
+        parameters: [{ name: 'request', description: 'task identity and target.' }],
+        returns: 'the stored task.',
+      },
+      {
+        signature: '@Remote(\'retry\') async retry(request: KanbanTaskRequest): Promise<KanbanTask>',
+        description: 'Requeue a failed task at the head of its lane.',
+        parameters: [{ name: 'request', description: 'failed task identity.' }],
+        returns: 'the stored task.',
+      },
+      {
+        signature: '@Remote(\'skip\') async skip(request: KanbanTaskRequest): Promise<KanbanTask>',
+        description: 'Move a failed task to the completed column without rerunning it; the lane resumes.',
+        parameters: [{ name: 'request', description: 'failed task identity.' }],
+        returns: 'the stored task.',
+      },
+      {
+        signature: '@Remote(\'delete\') async delete(request: KanbanTaskRequest): Promise<KanbanDeleteResult>',
+        description: 'Delete a task that is not running.',
+        parameters: [{ name: 'request', description: 'task identity.' }],
+        returns: 'the deleted identity.',
+      },
+    ],
+  },
+  {
     key: 'llm',
     summary: 'The abstract `llm` service: an adapter registry plus a streaming model-call API, interceptable via the `llm/stream` waterfall.',
     description: 'The abstract `llm` service: an adapter registry plus a streaming model-call API, interceptable via the `llm/stream` waterfall.',
@@ -5562,6 +5617,54 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'JsonValue',
     declaration: 'export type JsonValue = null | boolean | number | string | JsonValue[] | {\n    [key: string]: JsonValue;\n};',
+  },
+  {
+    name: 'KanbanBoard',
+    declaration: 'export interface KanbanBoard {\n    readonly workspaceId: WorkspaceId;\n    readonly tasks: readonly KanbanTask[];\n}',
+  },
+  {
+    name: 'KanbanCreateRequest',
+    declaration: 'export interface KanbanCreateRequest {\n    readonly workspaceId: WorkspaceId;\n    readonly title: string;\n    readonly prompt: string;\n}',
+  },
+  {
+    name: 'KanbanDeleteResult',
+    declaration: 'export interface KanbanDeleteResult {\n    readonly id: KanbanTaskId;\n    readonly deleted: true;\n}',
+  },
+  {
+    name: 'KanbanEditRequest',
+    declaration: 'export interface KanbanEditRequest {\n    readonly id: KanbanTaskId;\n    readonly title: string;\n    readonly prompt: string;\n}',
+  },
+  {
+    name: 'KanbanFailure',
+    declaration: 'export interface KanbanFailure {\n    readonly reason: KanbanFailureReason;\n    readonly message?: string | undefined;\n}',
+  },
+  {
+    name: 'KanbanFailureReason',
+    declaration: 'export type KanbanFailureReason = \'error\' | \'aborted\' | \'blocked\' | \'max-tokens\' | \'interrupted\' | \'discarded\' | \'dispatch\';',
+  },
+  {
+    name: 'KanbanMoveRequest',
+    declaration: 'export interface KanbanMoveRequest {\n    readonly id: KanbanTaskId;\n    readonly target: KanbanMoveTarget;\n}',
+  },
+  {
+    name: 'KanbanMoveTarget',
+    declaration: 'export type KanbanMoveTarget = {\n    readonly kind: \'plan\';\n    readonly beforeId?: KanbanTaskId;\n} | {\n    readonly kind: \'lane\';\n    readonly sessionId: SessionId;\n};',
+  },
+  {
+    name: 'KanbanTask',
+    declaration: 'export interface KanbanTask {\n    readonly id: KanbanTaskId;\n    readonly workspaceId: WorkspaceId;\n    readonly title: string;\n    readonly prompt: string;\n    readonly status: KanbanTaskStatus;\n    readonly sessionId?: SessionId | undefined;\n    readonly rank: number;\n    readonly failure?: KanbanFailure | undefined;\n    readonly createdAt: string;\n    readonly updatedAt: string;\n    readonly startedAt?: string | undefined;\n    readonly finishedAt?: string | undefined;\n}',
+  },
+  {
+    name: 'KanbanTaskId',
+    declaration: 'export type KanbanTaskId = Branded<\'KanbanTaskId\'>;',
+  },
+  {
+    name: 'KanbanTaskRequest',
+    declaration: 'export interface KanbanTaskRequest {\n    readonly id: KanbanTaskId;\n}',
+  },
+  {
+    name: 'KanbanTaskStatus',
+    declaration: 'export type KanbanTaskStatus = \'draft\' | \'waiting\' | \'running\' | \'attention\' | \'failed\' | \'done\' | \'skipped\';',
   },
   {
     name: 'KvFacet',

@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-10-08-experimental-kanban-dispatch.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-10-08-experimental-kanban-dispatch.md
+/agent-note-host-side-kanban-dispatch-settled-by-the-claiming-turn:
+  en: 43abb5cb8bd74b59
+  zh: e20409ab63678596
+/agent-note-host-side-kanban-dispatch-settled-by-the-claiming-turn/problem:
+  en: d08df717581f9f5a
+  zh: 252bdf8a8609e95f
+/agent-note-host-side-kanban-dispatch-settled-by-the-claiming-turn/decision:
+  en: 08182575beb69771
+  zh: f9c78ee9eaa21280
+/agent-note-host-side-kanban-dispatch-settled-by-the-claiming-turn/alternatives-considered:
+  en: 27aae8b3d84ed10e
+  zh: 7189fa6b2169a253
+/agent-note-host-side-kanban-dispatch-settled-by-the-claiming-turn/consequences:
+  en: 23f0b7ffbca67bd2
+  zh: d85f92e1364a787f
