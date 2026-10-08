@@ -657,6 +657,14 @@ describe('ConversationRoot resident composer', () => {
     expect(b.view.getByRole('tablist').hasAttribute('data-conversation-tabs')).toBe(true)
   })
 
+  it('names the rendered View on its area so the composer can follow Chat', () => {
+    const b = mount(sessionSnapshotOf(), undefined, undefined)
+    const area = () => b.view.container.querySelector('[data-conversation-view]')
+    expect(area()?.getAttribute('data-conversation-view')).toBe('chat')
+    act(() => { b.store.actions.setView('trajectory') })
+    expect(area()?.getAttribute('data-conversation-view')).toBe('trajectory')
+  })
+
   it('rolls the pending workspace label back when switching fails', async () => {
     const selectWorkspace = vi.fn(async () => { throw new Error('connect failed') })
     const b = mount(

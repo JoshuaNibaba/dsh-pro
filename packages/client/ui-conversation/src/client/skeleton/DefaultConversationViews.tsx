@@ -34,8 +34,10 @@ export function DefaultConversationViews({
 
   if (session.blank && conversationPhase(session, conversation) === 'blank') return null
   const viewId = view ?? active?.id
+  // data-conversation-view names the rendered View; the scroll body shows the
+  // composer only beside Chat (ConversationRoot.module.css).
   return (
-    <div className={css.viewArea}>
+    <div className={css.viewArea} data-conversation-view={viewId}>
       {viewId !== undefined && renderSlot('conversation.view', {
         inspectCall,
         viewRequest,

@@ -71,8 +71,16 @@ describe('Kanban Web board', () => {
     onTestFailed(async () => { await saveFailureShot(page, 'kanban-board') })
     // The board is a Conversation View tab beside Chat and Trajectory.
     await page.getByText(LANE_TITLE, { exact: true }).first().click()
-    const tab = page.locator('[data-conversation-tabs]').getByRole('tab', { name: 'Kanban board', exact: true })
+    // Only Chat carries the composer; Trajectory and the board render without it.
+    const tabs = page.locator('[data-conversation-tabs]')
+    const composer = page.locator('[data-composer-seat]')
+    await tabs.getByRole('tab', { name: 'Chat', exact: true }).click()
+    await expect.poll(() => composer.isVisible()).toBe(true)
+    await tabs.getByRole('tab', { name: 'Trajectory', exact: true }).click()
+    await expect.poll(() => composer.isVisible()).toBe(false)
+    const tab = tabs.getByRole('tab', { name: 'Kanban board', exact: true })
     await tab.click()
+    await expect.poll(() => composer.isVisible()).toBe(false)
     expect(await tab.getAttribute('aria-selected')).toBe('true')
     const board = page.getByTestId('kanban-page')
     await board.waitFor()

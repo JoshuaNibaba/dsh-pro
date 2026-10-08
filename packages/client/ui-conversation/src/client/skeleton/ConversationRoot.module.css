@@ -417,6 +417,13 @@ button.crumb:hover {
 
 /* The bar also stops 2px short of the scroller's ends, matching its 2px edge
    offset. WebKit-only: the Firefox path has no track to inset. */
+/* The composer belongs to Chat: another selected View (Trajectory, plugin
+   Views) renders without it. A blank Session renders no View area and keeps
+   its Hero composer. */
+.scrollBody:has(.viewArea[data-conversation-view]:not([data-conversation-view='chat'])) > .composerSeat {
+  display: none;
+}
+
 .scrollBody::-webkit-scrollbar-track {
   margin: 2px;
 }
