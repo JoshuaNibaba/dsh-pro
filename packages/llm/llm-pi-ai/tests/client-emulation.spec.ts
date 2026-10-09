@@ -30,8 +30,13 @@ const SESSION_UUID = 'd4836600-a5eb-4d60-b76e-7bffb24b32a5'
 const CLAUDE_CODE_IDENTITY = 'You are Claude Code, Anthropic\'s official CLI for Claude.'
 const CODEX_IDENTITY = 'You are Codex, based on GPT-5. You are running as a coding agent in the Codex CLI on a user\'s computer.'
 
+/** Resolve a partial Config input through the schema, as the Loader does. */
+function parse(input: object): ClientEmulationConfig {
+  return ClientEmulationConfigSchema(input as ClientEmulationConfig)
+}
+
 function enabled(overrides: Partial<ClientEmulationConfig['claudeCode']> = {}): ClientEmulationConfig {
-  const config = ClientEmulationConfigSchema({ enabled: true })
+  const config = parse({ enabled: true })
   return { ...config, claudeCode: { ...config.claudeCode, ...overrides } }
 }
 
@@ -76,7 +81,7 @@ async function messagesServer(): Promise<{ url: string; requests: Recorded[] }> 
   return { url: `http://127.0.0.1:${address.port}`, requests }
 }
 
-async function mount(providers: Record<string, unknown>, clientEmulation: ClientEmulationConfig): Promise<Context> {
+async function mount(providers: Record<string, LlmPiAi.PiAiProviderProfile>, clientEmulation: ClientEmulationConfig): Promise<Context> {
   vi.stubEnv('PI_TEST_KEY', 'test-key')
   const ctx = new Context()
   await ctx.plugin(LlmRuntime)
@@ -90,7 +95,10 @@ async function drain(ctx: Context, provider: string, model: string): Promise<voi
     model,
     system: 'you are a harness',
     sessionId: `session-${SESSION_UUID}` as never,
-    messages: [createUserMessage({ content: [{ type: 'text', text: 'hi' }] })],
+    messages: [createUserMessage({
+      content: [{ type: 'text', text: 'hi' }],
+      source: { kind: 'model', provider: 'deepseek-official', model: 'deepseek-v4-flash' },
+    })],
   })) {
     // The recorded request is the assertion.
   }
@@ -98,7 +106,7 @@ async function drain(ctx: Context, provider: string, model: string): Promise<voi
 
 describe('client emulation resolution', () => {
   it('stays off by default', () => {
-    expect(resolveClientEmulation(ClientEmulationConfigSchema({}), HOST)).toBeUndefined()
+    expect(resolveClientEmulation(parse({}), HOST)).toBeUndefined()
   })
 
   it('selects the emulated client from the route protocol', () => {
@@ -174,7 +182,7 @@ describe('client emulation request bodies', () => {
   })
 
   it('renders a configured Codex user agent verbatim', () => {
-    const config = ClientEmulationConfigSchema({ enabled: true, codex: { userAgent: 'codex_cli_rs/1.0.0 (Mac OS 26.5.2; arm64) iTerm.app/3.6.8' } })
+    const config = parse({ enabled: true, codex: { userAgent: 'codex_cli_rs/1.0.0 (Mac OS 26.5.2; arm64) iTerm.app/3.6.8' } })
     expect(emulationHeaders(resolved(config), 'codex', SESSION_UUID)['user-agent'])
       .toBe('codex_cli_rs/1.0.0 (Mac OS 26.5.2; arm64) iTerm.app/3.6.8')
   })
@@ -235,7 +243,7 @@ describe('client emulation requests', () => {
     const server = await messagesServer()
     const ctx = await mount({
       anthropic: { apiKeyEnv: 'PI_TEST_KEY', baseURL: server.url, compat: { supportsMidConvoToolChanges: false } },
-    }, ClientEmulationConfigSchema({}))
+    }, parse({}))
     await drain(ctx, 'anthropic', 'claude-opus-5-5')
 
     const [request] = server.requests

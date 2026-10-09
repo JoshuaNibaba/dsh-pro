@@ -13,6 +13,7 @@ import {
   WEB_SEARCH_USER_PREFIX, webSearchFamily, withSearchTool,
 } from '../src/web-search.ts'
 import { ClientEmulationConfigSchema, resolveClientEmulation } from '../src/client-emulation.ts'
+import type { ClientEmulationConfig } from '../src/client-emulation.ts'
 import { memoryAuth } from './auth-double.ts'
 
 const servers: Server[] = []
@@ -236,7 +237,7 @@ describe('PiAiAdapter.webSearch', () => {
   it('sends the search request as Claude Code when client emulation is enabled', async () => {
     const server = await sseServer(anthropicEvents)
     const clientEmulation = resolveClientEmulation(
-      ClientEmulationConfigSchema({ enabled: true }),
+      ClientEmulationConfigSchema({ enabled: true } as ClientEmulationConfig),
       { hostname: 'h', osName: 'Linux', osRelease: '6', arch: 'x86_64' },
     )
     const adapter = new PiAiAdapter({
