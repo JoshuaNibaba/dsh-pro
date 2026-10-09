@@ -109,7 +109,7 @@ sub2api 等订阅中转把 Claude 与 GPT 订阅提供给看起来像 Claude Cod
 
 | 被模拟客户端 | 请求头 | 请求体 |
 |---|---|---|
-| Claude Code | `User-Agent: claude-cli/<version> (external, cli)`、`x-app: cli`、`x-claude-code-session-id`；移除 `anthropic-dangerous-direct-browser-access` | 首个 system 块为 `claudeCode.identity`；`claudeCode.beta` 排在 `betas` 首位；`metadata.user_id` 为 Claude Code 的 JSON 字符串，含 `device_id`、空的 `account_uuid` 与 `session_id` |
+| Claude Code | `User-Agent: claude-cli/<version> (external, cli)`、`x-app: cli`、`x-claude-code-session-id`；移除 `anthropic-dangerous-direct-browser-access` | 首个 system 块为 `claudeCode.identity`；`claudeCode.beta` 排在 `betas` 首位；`metadata.user_id` 为 Claude Code 的 JSON 字符串，含 `device_id`、空的 `account_uuid` 与 `session_id`；当前推理强度从 pi-ai 的对话中途 effort 消息移到顶层 `output_config.effort`，并去掉这些消息及其 beta |
 | Codex CLI | `User-Agent`（已配置的值，或 `<originator>/<version> (<os> <release>; <arch>) <terminal>`）、`originator`、`version`、`session_id` | 在 `instructions` 或首条 system/developer 消息前加上 `codex.identity` |
 
 会话 id 取 Harness 会话 id 中的 UUID；会话之外的请求每个进程使用一个 UUID。`claudeCode.deviceId` 默认是主机名的 SHA-256，因此重启后保持不变。模拟请求头替换 Harness 署名，并覆盖路由 `headers` 中的同名头。被模拟路由上的原生网页搜索发送同样的请求头与身份。

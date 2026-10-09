@@ -18,9 +18,10 @@
 同步后检查：
 
 1. pi-ai 升级时确认 `onPayload` 仍在 `anthropic-messages`、`openai-responses`、`openai-completions` 中被调用，且请求头仍是“调用方 `headers` 最后合并”（伪装 `User-Agent` 才能生效）。
-2. 上游若改动 `attributionHeaders` 或 `requestHeaders`，确认启用伪装时 `User-Agent` 仍为 `claude-cli/...` / `codex_cli_rs/...`。
-3. 运行 `npx vitest run packages/llm/llm-pi-ai`，全部通过。
-4. 运行 `pnpm run gen-config-catalog` 更新配置目录。
+2. pi-ai 升级时确认 managed-effort 模型仍以“空内容 + `output_config` 的 system 消息”表达推理强度；伪装会把最后一条的 effort 移到顶层 `output_config.effort` 并删除这些消息与 `mid-conversation-output-config-*` beta，格式变了需同步修改 `topLevelEffort`。
+3. 上游若改动 `attributionHeaders` 或 `requestHeaders`，确认启用伪装时 `User-Agent` 仍为 `claude-cli/...` / `codex_cli_rs/...`。
+4. 运行 `npx vitest run packages/llm/llm-pi-ai`，全部通过。
+5. 运行 `pnpm run gen-config-catalog` 更新配置目录。
 
 部署配置（`~/.dsh/profiles/web/cordis.patch.yml` 中 `llm-pi-ai` 行的 `config`）需保留：
 

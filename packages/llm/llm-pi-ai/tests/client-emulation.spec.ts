@@ -2,7 +2,7 @@ import { createServer } from 'node:http'
 import type { IncomingHttpHeaders, IncomingMessage, Server, ServerResponse } from 'node:http'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import LlmRuntime, { createUserMessage, userAgent } from '@deepseek-ai/dsh-llm'
+import LlmRuntime, { createUserMessage, ReasoningEffortId, userAgent } from '@deepseek-ai/dsh-llm'
 import * as LlmPiAi from '../src/index.ts'
 import {
   ClientEmulationConfigSchema,
@@ -93,6 +93,7 @@ async function drain(ctx: Context, provider: string, model: string): Promise<voi
   for await (const _chunk of ctx.llm.stream({
     provider,
     model,
+    ...model === 'claude-opus-5-5' ? { reasoningEffort: ReasoningEffortId('medium') } : {},
     system: 'you are a harness',
     sessionId: `session-${SESSION_UUID}` as never,
     messages: [createUserMessage({
@@ -164,6 +165,29 @@ describe('client emulation request bodies', () => {
     expect(emulationPayload(emulation, 'claude-code', {}, SESSION_UUID)?.system).toEqual([{ type: 'text', text: CLAUDE_CODE_IDENTITY }])
   })
 
+  it('sends the active effort at the top level like Claude Code', () => {
+    const effort = (value: string): object => ({ role: 'system', content: [], output_config: { effort: value } })
+    const user = { role: 'user', content: 'hi' }
+    const assistant = { role: 'assistant', content: [{ type: 'text', text: 'ok' }] }
+    const notice = { role: 'system', content: [{ type: 'text', text: 'note' }] }
+    const body = emulationPayload(emulation, 'claude-code', {
+      output_config: { effort: 'high', format: 'x' },
+      betas: ['mid-conversation-output-config-2026-07-01', 'thinking-binding-controls-2026-08-01'],
+      messages: [user, effort('low'), assistant, notice, effort('medium')],
+    }, SESSION_UUID)
+    expect(body?.output_config).toEqual({ effort: 'medium', format: 'x' })
+    expect(body?.messages).toEqual([user, assistant, notice])
+    expect(body?.betas).toEqual(['claude-code-20250219', 'thinking-binding-controls-2026-08-01'])
+
+    const plain = emulationPayload(emulation, 'claude-code', { output_config: { effort: 'low' }, messages: [user] }, SESSION_UUID)
+    expect(plain?.output_config).toEqual({ effort: 'low' })
+    expect(plain?.messages).toEqual([user])
+    const fresh = emulationPayload(emulation, 'claude-code', { messages: [effort('max')] }, SESSION_UUID)
+    expect(fresh?.output_config).toEqual({ effort: 'max' })
+    const textual = { role: 'system', content: 'x', output_config: {} }
+    expect(emulationPayload(emulation, 'claude-code', { messages: [textual, 'raw'] }, SESSION_UUID)?.messages).toEqual([textual, 'raw'])
+  })
+
   it('places the Codex identity in instructions or the leading instruction message', () => {
     expect(emulationPayload(emulation, 'codex', { instructions: 'harness' }, SESSION_UUID))
       .toEqual({ instructions: `${CODEX_IDENTITY}\n\nharness` })
@@ -215,6 +239,9 @@ describe('client emulation requests', () => {
       account_uuid: '',
       session_id: SESSION_UUID,
     })
+    expect(request?.body.output_config).toEqual({ effort: 'medium' })
+    expect((request?.body.messages as { role: string }[]).map(message => message.role)).toEqual(['user'])
+    expect(String(request?.headers['anthropic-beta'])).not.toContain('mid-conversation-output-config')
   })
 
   it('sends OpenAI routes as the Codex CLI', async () => {

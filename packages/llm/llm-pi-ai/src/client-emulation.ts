@@ -212,7 +212,34 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-/** Prepend Claude Code's identity block, beta flag, and `metadata.user_id`. */
+/** Beta that carries effort in mid-conversation system messages; Claude Code sends effort at the top level instead. */
+const MID_CONVERSATION_OUTPUT_CONFIG_BETA = 'mid-conversation-output-config-2026-07-01'
+
+/** A pi-ai effort-only system message: empty content plus `output_config`. */
+function effortMessage(message: unknown): Record<string, unknown> | undefined {
+  if (!isRecord(message) || message.role !== 'system' || !isRecord(message.output_config)) return undefined
+  return Array.isArray(message.content) && message.content.length === 0 ? message.output_config : undefined
+}
+
+/**
+ * Move effort to the top level as Claude Code sends it: the last effort-only
+ * system message names the active effort, and every effort-only message and
+ * its beta are dropped.
+ */
+function topLevelEffort(payload: Record<string, unknown>, betas: unknown[]): Record<string, unknown> {
+  if (!Array.isArray(payload.messages)) return {}
+  const messages = payload.messages as unknown[]
+  const efforts = messages.map(effortMessage).filter(config => config !== undefined)
+  const active = efforts.at(-1)
+  if (active === undefined) return {}
+  return {
+    messages: messages.filter(message => effortMessage(message) === undefined),
+    output_config: { ...isRecord(payload.output_config) ? payload.output_config : {}, ...active },
+    betas: betas.filter(name => name !== MID_CONVERSATION_OUTPUT_CONFIG_BETA),
+  }
+}
+
+/** Prepend Claude Code's identity block, beta flag, and `metadata.user_id`; send effort at the top level. */
 function claudeCodePayload(
   emulation: ResolvedClientEmulation,
   payload: Record<string, unknown>,
@@ -225,10 +252,12 @@ function claudeCodePayload(
   const first = system[0]
   const hasIdentity = isRecord(first) && first.text === identity
   const betas = Array.isArray(payload.betas) ? payload.betas as unknown[] : []
+  const withBeta = betas.includes(beta) ? betas : [beta, ...betas]
   return {
     ...payload,
     system: hasIdentity ? system : [{ type: 'text', text: identity }, ...system],
-    betas: betas.includes(beta) ? betas : [beta, ...betas],
+    betas: withBeta,
+    ...topLevelEffort(payload, withBeta),
     metadata: {
       ...isRecord(payload.metadata) ? payload.metadata : {},
       user_id: JSON.stringify({ device_id: deviceId, account_uuid: '', session_id: sessionUuid }),

@@ -109,7 +109,7 @@ Subscription relays such as sub2api serve Claude and GPT subscriptions to client
 
 | Emulated client | Headers | Request body |
 |---|---|---|
-| Claude Code | `User-Agent: claude-cli/<version> (external, cli)`, `x-app: cli`, `x-claude-code-session-id`; `anthropic-dangerous-direct-browser-access` removed | first system block `claudeCode.identity`; `claudeCode.beta` first in `betas`; `metadata.user_id` as Claude Code's JSON string with `device_id`, empty `account_uuid`, and `session_id` |
+| Claude Code | `User-Agent: claude-cli/<version> (external, cli)`, `x-app: cli`, `x-claude-code-session-id`; `anthropic-dangerous-direct-browser-access` removed | first system block `claudeCode.identity`; `claudeCode.beta` first in `betas`; `metadata.user_id` as Claude Code's JSON string with `device_id`, empty `account_uuid`, and `session_id`; the active effort moves from pi-ai's mid-conversation effort messages to top-level `output_config.effort`, and those messages and their beta are dropped |
 | Codex CLI | `User-Agent` (configured, or `<originator>/<version> (<os> <release>; <arch>) <terminal>`), `originator`, `version`, `session_id` | `codex.identity` prepended to `instructions` or the leading system or developer message |
 
 The session id is the UUID inside the Harness session id; requests outside a session use one UUID per process. `claudeCode.deviceId` defaults to a SHA-256 of the host name, so it stays stable across restarts. Emulated headers replace Harness attribution and win over route `headers` of the same name. Native web search on an emulated route sends the same headers and identity.
