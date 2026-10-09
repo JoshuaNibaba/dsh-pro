@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# dsh-custom: keep the public fork branch `custom` following official releases and
+# dsh-custom: keep the public DSH Pro branch `main` following official releases and
 # deploy it on this machine. Lives on the orphan `deploy` branch (see README.md
 # beside it); the product source is the repository's main worktree.
 set -euo pipefail
@@ -7,7 +7,7 @@ set -euo pipefail
 TOOLS="$(dirname "$(readlink -f "$0")")"
 REPO="$(git -C "$TOOLS" worktree list --porcelain | sed -n '1s/^worktree //p')"
 cd "$REPO"
-BRANCH=custom
+BRANCH=main
 UPSTREAM=upstream
 STATE="$HOME/.dsh-custom"          # release slots and the trial DSH_HOME
 LINK="$HOME/.dsh-remote/dsh-bin"   # run-web.sh starts this instead of the npm dsh when present
@@ -107,7 +107,7 @@ $(printf '  %s\n' "${manual[@]}")
 
   编辑文件，保留官方的改动并重新加上本地的改动 → git add <文件>
   然后运行:dsh-custom resume      (提交合并、重新生成、测试、构建、推送)
-  放弃本次同步:git merge --abort   (分支回到同步前，备份在 backup/custom-*)
+  放弃本次同步:git merge --abort   (分支回到同步前，备份在 backup/$BRANCH-*)
   rerere 会自动套用以前解决过的同样冲突。
 EOF
     exit 1
@@ -187,12 +187,14 @@ finish_sync() {
 }
 
 # Merge an official release into the public branch. Never rewrites history, so
-# people who track the fork can always fast-forward.
+# people who track the fork can always fast-forward. The root README files carry
+# `merge=ours` in .gitattributes, which needs the `ours` driver configured here.
 cmd_sync() {
   local want=""
   NO_BUILD=0
   for a in "$@"; do case "$a" in --no-build) NO_BUILD=1 ;; *) want="$a" ;; esac; done
   require_clean
+  git config merge.ours.driver true
   [ "$(git branch --show-current)" = "$BRANCH" ] || git switch -q "$BRANCH"
   say "git fetch $UPSTREAM / origin"
   git fetch -q "$UPSTREAM" --tags --prune
@@ -202,7 +204,7 @@ cmd_sync() {
   git rev-parse -q --verify "refs/tags/$target" >/dev/null || die "上游没有标签 $target"
   if git merge-base --is-ancestor "$target" "$BRANCH"; then echo "已经包含 $target,无需同步"; return; fi
   git merge-base --is-ancestor "$base" "$target" || die "$target 不是 $base 的后续版本，合并不能回退版本"
-  local backup; backup="backup/custom-$(date +%Y%m%d-%H%M%S)"
+  local backup; backup="backup/$BRANCH-$(date +%Y%m%d-%H%M%S)"
   git branch -q "$backup" "$BRANCH"
   say "合并官方 $target 到 $BRANCH(备份分支 $backup)"
   git merge -q --no-ff --no-verify -m "Merge official release $target into $BRANCH" "$target" || continue_merge
@@ -215,7 +217,7 @@ cmd_resume() {
   NO_BUILD="${NO_BUILD:-0}" finish_sync
 }
 
-# Tag the current public branch as custom-v<official version>.<n> and publish a
+# Tag the current public branch as dsh-pro-v<official version>.<n> and publish a
 # GitHub Release whose notes list the fork's changes.
 cmd_release() {
   require_clean
@@ -225,18 +227,18 @@ cmd_release() {
   local base ver n tag notes repo
   repo="$(git remote get-url origin | sed -E 's#^(https://github.com/|git@github.com:)##; s#\.git$##')"
   base="$(base_tag)"; ver="${base#dsh-v}"
-  n=1; while git rev-parse -q --verify "refs/tags/custom-v$ver.$n" >/dev/null; do n=$((n + 1)); done
-  tag="custom-v$ver.$n"
+  n=1; while git rev-parse -q --verify "refs/tags/dsh-pro-v$ver.$n" >/dev/null; do n=$((n + 1)); done
+  tag="dsh-pro-v$ver.$n"
   # An earlier run may have pushed the tag of this exact commit without creating its release.
-  if [ "$n" -gt 1 ] && [ "$(git rev-parse "custom-v$ver.$((n - 1))^{commit}")" = "$(git rev-parse "$BRANCH")" ]; then
-    tag="custom-v$ver.$((n - 1))"
+  if [ "$n" -gt 1 ] && [ "$(git rev-parse "dsh-pro-v$ver.$((n - 1))^{commit}")" = "$(git rev-parse "$BRANCH")" ]; then
+    tag="dsh-pro-v$ver.$((n - 1))"
     gh release view "$tag" -R "$repo" >/dev/null 2>&1 && die "$BRANCH 已发布为 $tag"
   fi
   notes="$(mktemp)"
   {
-    echo "基于官方 [$base](https://github.com/deepseek-ai/deepseek-harness/releases/tag/$base) 的非官方 fork 版本。改动说明见 [FORK.zh.md](https://github.com/$repo/blob/$tag/FORK.zh.md)。"
+    echo "基于官方 [$base](https://github.com/deepseek-ai/deepseek-harness/releases/tag/$base) 的 DeepSeek Harness Pro 版本。介绍与改动说明见 [README](https://github.com/$repo/blob/$tag/README.zh.md)。"
     echo
-    echo "## 本 fork 的提交"
+    echo "## DSH Pro 的提交"
     git log --no-merges --format='- %s (%h)' "$base..$BRANCH"
   } >"$notes"
   git rev-parse -q --verify "refs/tags/$tag" >/dev/null || git tag -a "$tag" -m "$tag (based on $base)" "$BRANCH"
@@ -276,7 +278,7 @@ smoke() {
   return "$ok"
 }
 
-# Build the current custom commit into the idle release slot, then switch the
+# Build the current $BRANCH commit into the idle release slot, then switch the
 # service to it. Two slots, so the running build is never rebuilt in place.
 cmd_deploy() {
   require_clean
@@ -324,14 +326,14 @@ case "${1:-status}" in
   *) cat <<'EOF'
 用法:dsh-custom <命令>
   status              当前基线、官方最新版本、本地修改列表、服务运行的版本(默认)
-  sync [频道|标签]    把官方新版本 merge 进 custom(默认 npm latest;也可 alpha / next / dsh-v0.2.1)。
+  sync [频道|标签]    把官方新版本 merge 进 main(默认 npm latest;也可 alpha / next / dsh-v0.2.1)。
                       不改写历史；生成文件的冲突自动采用官方版本后重新生成；随后跑本地修改的测试、构建、正常推送
        --no-build     只同步、重新生成和测试，不构建
   resume              手动解决冲突后继续同步(之后的步骤同 sync)
   regen               重新生成锁文件和生成文件，有变化时单独提交
   check               运行本地修改的测试
   build               pnpm install + pnpm run build
-  release             给 custom 打 custom-v<官方版本>.<n> 标签并发布 GitHub Release
+  release             给 main 打 dsh-pro-v<官方版本>.<n> 标签并发布 GitHub Release
   try [端口]          用独立数据目录试运行构建结果(默认 18795),不影响正在运行的服务
   deploy              构建到备用目录，试启动成功后让 dsh-web 服务改用它
   undeploy            让服务改回官方 npm 版本
