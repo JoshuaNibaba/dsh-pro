@@ -461,8 +461,14 @@ async function bootPreview(origin: string, browser: Browser): Promise<void> {
     await catalog.getByRole('treeitem', { name: /Continue preview verification/ }).waitFor()
     await catalog.press('Escape')
 
-    await page.getByRole('button', { name: 'Load earlier', exact: true }).click()
-    await page.getByText(SHOWCASE_OLDEST, { exact: true }).waitFor({ timeout: 15_000 })
+    // DSH Pro history windows hold three Turns, so reaching the oldest
+    // checkpoint can take several pages.
+    const loadEarlier = page.getByRole('button', { name: 'Load earlier', exact: true })
+    const oldest = page.getByText(SHOWCASE_OLDEST, { exact: true })
+    await expect.poll(async () => {
+      if (await loadEarlier.isVisible()) await loadEarlier.click()
+      return oldest.isVisible()
+    }, { timeout: 30_000, interval: 500 }).toBe(true)
     expect(pageErrors.map(error => error.message)).toEqual([])
     expect(consoleErrors.filter(line =>
       /watchFile|failed to watch|node-addon-system\.probe|sandbox backend is usable|SANDBOX_UNAVAILABLE/i.test(line))).toEqual([])
