@@ -23,6 +23,9 @@
 /deepseek-ai-dsh-llm-pi-ai/use-this-package/configure-provider-routes:
   en: c5d28300fa2cfc6f
   zh: c162855dcb54b65b
+/deepseek-ai-dsh-llm-pi-ai/use-this-package/emulate-claude-code-and-the-codex-cli:
+  en: a0bcc36c82301416
+  zh: bbb4282ee72fb7b2
 /deepseek-ai-dsh-llm-pi-ai/use-this-package/sign-in-to-a-provider:
   en: c36f66438638ae08
   zh: 066a2fc4cb97c86f
@@ -48,8 +51,8 @@
   en: 280416de410744bb
   zh: 64cbfc0902e3f436
 /deepseek-ai-dsh-llm-pi-ai/understand-the-implementation/source-map:
-  en: 20afee7bbfb332ca
-  zh: b080cf4e97094366
+  en: 8cd52c89bd5b8798
+  zh: 522c9d913b3f71c3
 /deepseek-ai-dsh-llm-pi-ai/understand-the-implementation/registration-and-directory:
   en: 4da379c9be65c18a
   zh: fd305d4bd3dfa452
@@ -66,11 +69,11 @@
   en: e7348db3f7115960
   zh: 5fd5fb09d7d09982
 /deepseek-ai-dsh-llm-pi-ai/model-experience/provider-request-through-pi-ai/what-the-model-sees:
-  en: 38c3f6599cabccb9
-  zh: 3f5b728a3343b545
+  en: ecddd32c7ce125f8
+  zh: 336b465ad0a3c323
 /deepseek-ai-dsh-llm-pi-ai/model-experience/provider-request-through-pi-ai/token-effect:
-  en: 820221e8ae37aa61
-  zh: 7e6ff4db10067fc0
+  en: 513bee8b183bbe0c
+  zh: 7e2c3bf172141cfa
 /deepseek-ai-dsh-llm-pi-ai/model-experience/provider-request-through-pi-ai/kv-cache-effect:
   en: 8c8c144cbc489391
   zh: 4a24c69e54864ccd

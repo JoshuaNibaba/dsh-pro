@@ -12,6 +12,7 @@ import {
   ANTHROPIC_WEB_SEARCH_MAX_USES, observingFetch, readServerSentEvents, WEB_SEARCH_SYSTEM_PROMPT,
   WEB_SEARCH_USER_PREFIX, webSearchFamily, withSearchTool,
 } from '../src/web-search.ts'
+import { ClientEmulationConfigSchema, resolveClientEmulation } from '../src/client-emulation.ts'
 import { memoryAuth } from './auth-double.ts'
 
 const servers: Server[] = []
@@ -230,6 +231,26 @@ describe('PiAiAdapter.webSearch', () => {
       provider: 'anthropic', model: 'claude-haiku-4-5', api: 'anthropic-messages',
       body: { tool_choice: { type: 'tool', name: 'web_search' } },
     })
+  })
+
+  it('sends the search request as Claude Code when client emulation is enabled', async () => {
+    const server = await sseServer(anthropicEvents)
+    const clientEmulation = resolveClientEmulation(
+      ClientEmulationConfigSchema({ enabled: true }),
+      { hostname: 'h', osName: 'Linux', osRelease: '6', arch: 'x86_64' },
+    )
+    const adapter = new PiAiAdapter({
+      profiles: () => resolveProfiles({ anthropic: { baseURL: server.url } }),
+      resolveApiKey: () => Promise.resolve('test-key'),
+      auth: memoryAuth(),
+      ...clientEmulation === undefined ? {} : { clientEmulation },
+    })
+    await adapter.webSearch({ provider: 'anthropic', model: 'claude-haiku-4-5', query: 'q' })
+    const sent = server.requests[0]?.body as { system: { text: string }[]; tools: unknown[]; metadata: { user_id: string } }
+    expect(sent.system[0]?.text).toBe('You are Claude Code, Anthropic\'s official CLI for Claude.')
+    expect(JSON.stringify(sent.system)).toContain(WEB_SEARCH_SYSTEM_PROMPT)
+    expect(sent.tools).toHaveLength(1)
+    expect(Object.keys(JSON.parse(sent.metadata.user_id) as Record<string, string>)).toEqual(['device_id', 'account_uuid', 'session_id'])
   })
 
   it('reports a provider search error as an error segment', async () => {

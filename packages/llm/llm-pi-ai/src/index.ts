@@ -58,6 +58,7 @@ import type {} from '@deepseek-ai/dsh-settings'
 
 import type {} from '@deepseek-ai/cordis-plugin-loader'
 
+import { hostname, release } from 'node:os'
 import type { Context } from '@deepseek-ai/cordis'
 import { launchEnvironmentOf } from '@deepseek-ai/dsh-launch-environment'
 import { assertUsableApiKey, LlmError, resolveImageAttachmentAccess } from '@deepseek-ai/dsh-llm'
@@ -72,6 +73,7 @@ import type { ResolvedPiAiProviderProfile } from './config.ts'
 import { discoverModels } from './discovery.ts'
 import type { StoredModelDiscoveryProfile } from './discovery.ts'
 import { registerPiAiFlows } from './login.ts'
+import { emulationHostFacts, resolveClientEmulation } from './client-emulation.ts'
 
 export { PiAiAdapter } from './adapter.ts'
 export type { PiAiAdapterOptions } from './adapter.ts'
@@ -87,6 +89,7 @@ export type {
   PiAiThinkingFormat,
   ResolvedPiAiProviderProfile,
 } from './config.ts'
+export type { ClaudeCodeEmulationConfig, ClientEmulationConfig, CodexEmulationConfig } from './client-emulation.ts'
 export { recordKeyFor } from './auth.ts'
 export { supportedProtocols } from './provider.ts'
 
@@ -209,7 +212,12 @@ export function apply(ctx: Context, config: Config): void {
   // through `ctx` per call, so they stay correct across the collection rebuilds
   // a configuration change causes, and a sign-in survives one.
   const auth = { credentials: credentialStoreFrom(ctx), authContext: authContextFrom(ctx) }
+  const clientEmulation = resolveClientEmulation(
+    config.clientEmulation,
+    emulationHostFacts({ hostname: hostname(), platform: process.platform, release: release(), arch: process.arch }),
+  )
   const adapter = new PiAiAdapter({
+    ...clientEmulation === undefined ? {} : { clientEmulation },
     profiles,
     resolveApiKey,
     auth,

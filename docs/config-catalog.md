@@ -456,6 +456,12 @@ export interface ConnectionConfig {
    * bind. An entry that is not a bare, canonical authority fails plugin load.
    */
   trustedHosts?: string[]
+  /**
+   * Non-loopback authorities whose pages get the operator surface a loopback
+   * page gets, such as reading and writing Host settings. Same entry syntax as
+   * `trustedHosts`; use only for authorities behind the browser login.
+   */
+  privilegedHosts?: string[]
   /** Absolute browser-session lifetime in days. Default: 30. */
   cookieMaxAgeDays?: number
   /** Maximum buffered JSON body for every `/api` request. Default: 300 MiB. */
@@ -1657,7 +1663,7 @@ export interface Config extends ProtocolConfig {
 
 - `inject`: `llm`
 - `refs`: `Api` (`@earendil-works/pi-ai`) · `CacheRetention` (`@earendil-works/pi-ai`) · `Model` (`@earendil-works/pi-ai`) · `ModelThinkingLevel` (`@earendil-works/pi-ai`) · `OpenAICompletionsCompat` (`@earendil-works/pi-ai`) · [`RetryPolicyConfig`](../packages/llm/llm/src/index.ts) · `ThinkingBudgets` (`@earendil-works/pi-ai`) · `Transport` (`@earendil-works/pi-ai`) · `Volatile` (`@deepseek-ai/cordis`)
-- `source`: [`packages/llm/llm-pi-ai/src/config.ts:222`](../packages/llm/llm-pi-ai/src/config.ts)
+- `source`: [`packages/llm/llm-pi-ai/src/config.ts:224`](../packages/llm/llm-pi-ai/src/config.ts)
 
 ```ts config-catalog
 /** Plugin configuration: the provider routes this instance owns. */
@@ -1668,6 +1674,8 @@ export interface Config {
    * and registers them the moment a settings section supplies profiles.
    */
   providers: Volatile<Record<string, PiAiProviderProfile>>
+  /** Claude Code and Codex CLI request emulation, selected per route by its protocol; disabled by default. */
+  clientEmulation: ClientEmulationConfig
 }
 
 /** Configuration for one pi-ai provider route; the `providers` dict key IS the route. */
@@ -1762,6 +1770,16 @@ export interface PiAiProviderProfile {
   requestImageMaxBytes?: number
   /** Provider-owned model-request retry policy; omission uses normal mode with five retries. */
   retryPolicy?: RetryPolicyConfig
+}
+
+/** Plugin-level client emulation settings. */
+export interface ClientEmulationConfig {
+  /** Whether Anthropic routes emulate Claude Code and OpenAI routes emulate the Codex CLI. */
+  enabled: boolean
+  /** Settings for `anthropic-messages` routes. */
+  claudeCode: ClaudeCodeEmulationConfig
+  /** Settings for `openai-completions`, `openai-responses`, and `openai-codex-responses` routes. */
+  codex: CodexEmulationConfig
 }
 
 /** One configured model entry: an id plus the catalog fields it overrides. */
@@ -1911,6 +1929,32 @@ export interface PiAiCompatProfile {
 
 /** One request modality a pi-ai model may accept. */
 export type PiAiModality = Model<Api>['input'][number]
+
+/** Claude Code emulation settings. */
+export interface ClaudeCodeEmulationConfig {
+  /** Claude Code version rendered into `User-Agent: claude-cli/<version> (external, cli)`. */
+  version: string
+  /** Sentence sent as the first system block. */
+  identity: string
+  /** Beta flag added to the request's `anthropic-beta` list. */
+  beta: string
+  /** 64-hex-digit device id for `metadata.user_id`; omission derives one from the host name. */
+  deviceId?: string
+}
+
+/** Codex CLI emulation settings. */
+export interface CodexEmulationConfig {
+  /** Codex CLI version sent in the `version` header and the default `User-Agent`. */
+  version: string
+  /** Value of the `originator` header. */
+  originator: string
+  /** Complete `User-Agent`; omission renders `<originator>/<version> (<os> <release>; <arch>) <terminal>`. */
+  userAgent?: string
+  /** Terminal token at the end of the rendered `User-Agent`. */
+  terminal: string
+  /** Sentence prepended to the leading system or developer message. */
+  identity: string
+}
 
 /**
  * Selectable reasoning efforts for one model: each key is a level the model

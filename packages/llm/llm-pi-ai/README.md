@@ -90,6 +90,30 @@ Each profile may set a `retryPolicy`; omission uses normal mode with five retrie
 
 The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-llm-pi-ai) is the exhaustive source for every accepted field and its JSDoc.
 
+### Emulate Claude Code and the Codex CLI
+
+Subscription relays such as sub2api serve Claude and GPT subscriptions to clients that look like Claude Code or the Codex CLI. The plugin-level `clientEmulation` block makes every route present itself that way, selected by the route protocol: `anthropic-messages` routes emulate Claude Code, and `openai-completions`, `openai-responses`, and `openai-codex-responses` routes emulate the Codex CLI. Other protocols keep Harness attribution. Emulation is disabled by default.
+
+```yaml
+- id: llm-pi-ai
+  name: '@deepseek-ai/dsh-llm-pi-ai'
+  config:
+    clientEmulation:
+      enabled: true
+      claudeCode:
+        version: 2.1.280          # claude-cli/<version> (external, cli)
+      codex:
+        version: 0.153.4
+    providers: {}
+```
+
+| Emulated client | Headers | Request body |
+|---|---|---|
+| Claude Code | `User-Agent: claude-cli/<version> (external, cli)`, `x-app: cli`, `x-claude-code-session-id`; `anthropic-dangerous-direct-browser-access` removed | first system block `claudeCode.identity`; `claudeCode.beta` first in `betas`; `metadata.user_id` as Claude Code's JSON string with `device_id`, empty `account_uuid`, and `session_id` |
+| Codex CLI | `User-Agent` (configured, or `<originator>/<version> (<os> <release>; <arch>) <terminal>`), `originator`, `version`, `session_id` | `codex.identity` prepended to `instructions` or the leading system or developer message |
+
+The session id is the UUID inside the Harness session id; requests outside a session use one UUID per process. `claudeCode.deviceId` defaults to a SHA-256 of the host name, so it stays stable across restarts. Emulated headers replace Harness attribution and win over route `headers` of the same name. Native web search on an emulated route sends the same headers and identity.
+
 ### Sign in to a provider
 
 A provider pi-ai ships a login for can be signed into through the harness authorization seam: the flow offers OAuth or an interactive key prompt (a key is typed into pi-ai's own login prompt, not into the settings form), and the resulting credential is stored in the harness credential store at `llm-pi-ai/<provider id>`. The stored sign-in authenticates its route beneath any `apiKeyEnv` override and refreshes itself under the store's cross-process lock; signing out deletes the stored record. A hand-declared route key outside the record grammar — a lowercase hyphenated identifier — cannot be signed into, because a record write for it refuses with `LlmError('UNSTORABLE_PROVIDER_ID')`; such a route authenticates through `apiKeyEnv` or ambient provider settings instead.
@@ -149,6 +173,7 @@ The adapter is built on immutable snapshots and per-operation resolution. Each o
 | [`src/stream.ts`](src/stream.ts) | pi-ai event conversion into harness `StreamChunk` values |
 | [`src/replay.ts`](src/replay.ts) | Versioned `ReplayEnvelope` storage and validation |
 | [`src/discovery.ts`](src/discovery.ts) | Endpoint interrogation for configuration surfaces |
+| [`src/client-emulation.ts`](src/client-emulation.ts) | Claude Code and Codex CLI request emulation |
 
 ### Registration and directory
 
@@ -183,11 +208,11 @@ Read these pages when the package-level contract is not enough. They move from t
 
 #### What the model sees
 
-The selected catalog model receives one system prompt (`GenerateOptions.system`, otherwise the text of a leading `system` history message; a leading system message with empty text sends none), the remaining history, tools, and sampling fields supported by pi-ai's common streaming API. Each retained image is preceded by text naming its complete attachment id and actual request dimensions. When the current execution filesystem maps the attachment provider's host object, the text also carries a read-only normalized-object path and warns that normalization or request projection may have resized or re-encoded the upload. Each occurrence selected by a logged image-offload decision keeps its own identity and currently resolved access in replacement text, and its normalized attachment is not read or transformed. When the retained occurrences' exact base64 payload still exceeds the route's `maxRequestImageBytes`, the call fails with `IMAGE_OFFLOAD_REQUIRED` so `dsh-compaction-image-offload` records the selected occurrences in an `image/offload` event and retries the step. Provider-native replay metadata is restored only when the adapter validates it for the historical content. Tool declarations marked `deferLoading` are left out of the leading tool set, and each projected developer message becomes a pi-ai system message carrying its `toolsAdded` definitions and `toolsRemoved` names. A catalog Anthropic model whose compat sets both `supportsMidConvoSystemMessages` and `supportsMidConvoToolChanges` resolves with `toolUpdate: 'in-history'`, so pi-ai sends those changes as `tool_addition` blocks with inline definitions and `tool_removal` blocks under the `inline-tools-2026-09-15` beta. Every other model resolves without `toolUpdate` and receives the complete current tool list. A route behind a gateway that strips that beta sets `compat.supportsMidConvoToolChanges: false`.
+The selected catalog model receives one system prompt (`GenerateOptions.system`, otherwise the text of a leading `system` history message; a leading system message with empty text sends none), the remaining history, tools, and sampling fields supported by pi-ai's common streaming API. Each retained image is preceded by text naming its complete attachment id and actual request dimensions. When the current execution filesystem maps the attachment provider's host object, the text also carries a read-only normalized-object path and warns that normalization or request projection may have resized or re-encoded the upload. Each occurrence selected by a logged image-offload decision keeps its own identity and currently resolved access in replacement text, and its normalized attachment is not read or transformed. When the retained occurrences' exact base64 payload still exceeds the route's `maxRequestImageBytes`, the call fails with `IMAGE_OFFLOAD_REQUIRED` so `dsh-compaction-image-offload` records the selected occurrences in an `image/offload` event and retries the step. Provider-native replay metadata is restored only when the adapter validates it for the historical content. Tool declarations marked `deferLoading` are left out of the leading tool set, and each projected developer message becomes a pi-ai system message carrying its `toolsAdded` definitions and `toolsRemoved` names. A catalog Anthropic model whose compat sets both `supportsMidConvoSystemMessages` and `supportsMidConvoToolChanges` resolves with `toolUpdate: 'in-history'`, so pi-ai sends those changes as `tool_addition` blocks with inline definitions and `tool_removal` blocks under the `inline-tools-2026-09-15` beta. Every other model resolves without `toolUpdate` and receives the complete current tool list. A route behind a gateway that strips that beta sets `compat.supportsMidConvoToolChanges: false`. With `clientEmulation.enabled`, an Anthropic route's system prompt is preceded by a separate `claudeCode.identity` block, and an OpenAI route's leading instruction text is preceded by `codex.identity` and a blank line; both sentences come from Config.
 
 #### Token effect
 
-Provider tokenization governs exact input. Retained images add the stable attachment and coordinate descriptor; the offload placeholder replaces an omitted image's visual tokens. Replay metadata may let a native API reuse provider-side state.
+Provider tokenization governs exact input. Retained images add the stable attachment and coordinate descriptor; the offload placeholder replaces an omitted image's visual tokens. Replay metadata may let a native API reuse provider-side state. Client emulation adds the identity sentence's tokens to every request on an emulated route.
 
 #### KV Cache effect
 

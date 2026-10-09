@@ -90,6 +90,30 @@ kind: "package-reference"
 
 生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-llm-pi-ai)是每个受支持字段及其 JSDoc 的穷尽式真源。
 
+### 模拟 Claude Code 与 Codex CLI
+
+sub2api 等订阅中转把 Claude 与 GPT 订阅提供给看起来像 Claude Code 或 Codex CLI 的客户端。插件级 `clientEmulation` 块让每条路由按协议以对应身份出现：`anthropic-messages` 路由模拟 Claude Code，`openai-completions`、`openai-responses` 与 `openai-codex-responses` 路由模拟 Codex CLI。其他协议保留 Harness 署名。默认关闭。
+
+```yaml
+- id: llm-pi-ai
+  name: '@deepseek-ai/dsh-llm-pi-ai'
+  config:
+    clientEmulation:
+      enabled: true
+      claudeCode:
+        version: 2.1.280          # claude-cli/<version> (external, cli)
+      codex:
+        version: 0.153.4
+    providers: {}
+```
+
+| 被模拟客户端 | 请求头 | 请求体 |
+|---|---|---|
+| Claude Code | `User-Agent: claude-cli/<version> (external, cli)`、`x-app: cli`、`x-claude-code-session-id`；移除 `anthropic-dangerous-direct-browser-access` | 首个 system 块为 `claudeCode.identity`；`claudeCode.beta` 排在 `betas` 首位；`metadata.user_id` 为 Claude Code 的 JSON 字符串，含 `device_id`、空的 `account_uuid` 与 `session_id` |
+| Codex CLI | `User-Agent`（已配置的值，或 `<originator>/<version> (<os> <release>; <arch>) <terminal>`）、`originator`、`version`、`session_id` | 在 `instructions` 或首条 system/developer 消息前加上 `codex.identity` |
+
+会话 id 取 Harness 会话 id 中的 UUID；会话之外的请求每个进程使用一个 UUID。`claudeCode.deviceId` 默认是主机名的 SHA-256，因此重启后保持不变。模拟请求头替换 Harness 署名，并覆盖路由 `headers` 中的同名头。被模拟路由上的原生网页搜索发送同样的请求头与身份。
+
 ### 登录提供方
 
 pi-ai 提供登录的提供方可以通过 harness 授权 seam 登录：流程提供 OAuth 或交互式密钥提示（密钥键入 pi-ai 自己的登录提示，而非设置表单），得到的凭据存储在 harness 凭据存储的 `llm-pi-ai/<provider id>` 记录中。存储的登录在其路由的 `apiKeyEnv` 覆盖之下完成认证，并在存储的跨进程锁下自行刷新；退出登录即删除存储记录。落在记录文法之外——小写连字符标识符——的手工声明路由键无法登录，因为对它的记录写入会以 `LlmError('UNSTORABLE_PROVIDER_ID')` 拒绝；这类路由改用 `apiKeyEnv` 或提供方 ambient 设置认证。
@@ -149,6 +173,7 @@ Config 更新严格验证发生变化的 provider。初始加载将已存储的�
 | [`src/stream.ts`](src/stream.ts) | 把 pi-ai 事件转换为 harness `StreamChunk` 值 |
 | [`src/replay.ts`](src/replay.ts) | 带版本的 `ReplayEnvelope` 存储与校验 |
 | [`src/discovery.ts`](src/discovery.ts) | 面向配置界面的端点询问 |
+| [`src/client-emulation.ts`](src/client-emulation.ts) | Claude Code 与 Codex CLI 请求模拟 |
 
 ### 注册与目录
 
@@ -183,11 +208,11 @@ Config 更新严格验证发生变化的 provider。初始加载将已存储的�
 
 #### 模型看到什么
 
-所选目录模型会收到一条系统提示词（`GenerateOptions.system`，否则取历史中首条 `system` 消息的文本；首条 system 消息文本为空时不发送系统提示词）、其余历史、工具与 pi-ai 通用流式 API 支持的采样字段。每张保留图片前都会有文本，注明其完整附件 id 与实际请求尺寸。当前执行文件系统可以映射附件提供方的宿主对象时，该文本还会携带只读规范化对象路径，并警告规范化或请求投影可能缩放或重新编码上传内容。日志中的图片省略决策选中的每个出现位置都会在替换文本中保留自己的身份与当前已解析访问方式，其规范化附件不会读取或变换。当保留的出现位置按精确 base64 载荷仍超过路由的 `maxRequestImageBytes` 时，调用以 `IMAGE_OFFLOAD_REQUIRED` 失败，由 `dsh-compaction-image-offload` 用 `image/offload` 事件记录所选位置并重试步骤。提供方原生回放元数据只在适配器针对历史内容校验通过后恢复。标记了 `deferLoading` 的工具声明不进入开头的工具集，每条投影后的 developer 消息都会变成一条 pi-ai system 消息，携带其 `toolsAdded` 定义与 `toolsRemoved` 名称。若目录中的 Anthropic 模型在 compat 中同时设置了 `supportsMidConvoSystemMessages` 和 `supportsMidConvoToolChanges`，它解析为 `toolUpdate: 'in-history'`，pi-ai 便在 `inline-tools-2026-09-15` beta 下把这些变化作为带内联定义的 `tool_addition` 块与 `tool_removal` 块发送。其他模型解析时不带 `toolUpdate`，收到完整的当前工具列表。网关若会剥离该 beta，对应路由应设置 `compat.supportsMidConvoToolChanges: false`。
+所选目录模型会收到一条系统提示词（`GenerateOptions.system`，否则取历史中首条 `system` 消息的文本；首条 system 消息文本为空时不发送系统提示词）、其余历史、工具与 pi-ai 通用流式 API 支持的采样字段。每张保留图片前都会有文本，注明其完整附件 id 与实际请求尺寸。当前执行文件系统可以映射附件提供方的宿主对象时，该文本还会携带只读规范化对象路径，并警告规范化或请求投影可能缩放或重新编码上传内容。日志中的图片省略决策选中的每个出现位置都会在替换文本中保留自己的身份与当前已解析访问方式，其规范化附件不会读取或变换。当保留的出现位置按精确 base64 载荷仍超过路由的 `maxRequestImageBytes` 时，调用以 `IMAGE_OFFLOAD_REQUIRED` 失败，由 `dsh-compaction-image-offload` 用 `image/offload` 事件记录所选位置并重试步骤。提供方原生回放元数据只在适配器针对历史内容校验通过后恢复。标记了 `deferLoading` 的工具声明不进入开头的工具集，每条投影后的 developer 消息都会变成一条 pi-ai system 消息，携带其 `toolsAdded` 定义与 `toolsRemoved` 名称。若目录中的 Anthropic 模型在 compat 中同时设置了 `supportsMidConvoSystemMessages` 和 `supportsMidConvoToolChanges`，它解析为 `toolUpdate: 'in-history'`，pi-ai 便在 `inline-tools-2026-09-15` beta 下把这些变化作为带内联定义的 `tool_addition` 块与 `tool_removal` 块发送。其他模型解析时不带 `toolUpdate`，收到完整的当前工具列表。网关若会剥离该 beta，对应路由应设置 `compat.supportsMidConvoToolChanges: false`。启用 `clientEmulation.enabled` 时，Anthropic 路由的系统提示词前多一个独立的 `claudeCode.identity` 块，OpenAI 路由的首条指令文本前多出 `codex.identity` 与一个空行；两句都来自 Config。
 
 #### Token 影响
 
-提供方分词决定精确输入。保留图片会添加稳定的附件与坐标描述符；卸载占位符会替代省略图片的视觉 token。回放元数据可能让原生 API 复用提供方侧状态。
+提供方分词决定精确输入。保留图片会添加稳定的附件与坐标描述符；卸载占位符会替代省略图片的视觉 token。回放元数据可能让原生 API 复用提供方侧状态。客户端模拟会在被模拟路由的每个请求中加入身份句的 token。
 
 #### KV Cache 影响
 

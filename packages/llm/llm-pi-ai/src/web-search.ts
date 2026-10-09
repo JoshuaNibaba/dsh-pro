@@ -264,6 +264,8 @@ export interface WebSearchDispatch {
   options: SimpleStreamOptions
   /** Fetch implementation the wrapper delegates to; defaults to `globalThis.fetch`. */
   fetch?: FetchFunction
+  /** Final request-body rewrite after the search tool is attached, such as client emulation. */
+  transformPayload?: (payload: Record<string, unknown>) => Record<string, unknown> | undefined
 }
 
 /**
@@ -296,7 +298,8 @@ export async function runWebSearch(dispatch: WebSearchDispatch, request: LlmWebS
     fetch,
     onPayload: (payload) => {
       if (!isRecord(payload)) return undefined
-      const body = withSearchTool(family, model, payload)
+      const searchBody = withSearchTool(family, model, payload)
+      const body = dispatch.transformPayload?.(searchBody) ?? searchBody
       request.onRequest?.({
         provider: request.provider,
         model: request.model,

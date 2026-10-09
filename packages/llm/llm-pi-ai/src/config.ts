@@ -42,6 +42,8 @@ import type {
   RouteCatalog,
 } from './catalog.ts'
 import { buildProvider, supportedProtocols } from './provider.ts'
+import { ClientEmulationConfigSchema } from './client-emulation.ts'
+import type { ClientEmulationConfig } from './client-emulation.ts'
 
 /** Default maximum idle interval while an adapter stream read is outstanding. */
 export const DEFAULT_STREAM_IDLE_TIMEOUT_MS = 300_000
@@ -226,6 +228,8 @@ export interface Config {
    * and registers them the moment a settings section supplies profiles.
    */
   providers: Volatile<Record<string, PiAiProviderProfile>>
+  /** Claude Code and Codex CLI request emulation, selected per route by its protocol; disabled by default. */
+  clientEmulation: ClientEmulationConfig
 }
 
 /** Plain options accepted by the provider resolver. */
@@ -352,6 +356,7 @@ const profile = z.object({
 /** Runtime schema for {@link Config}. */
 export const Config = z.object({
   providers: z.dict(profile).default({}).volatile(),
+  clientEmulation: ClientEmulationConfigSchema.default({}),
 })
 
 /**

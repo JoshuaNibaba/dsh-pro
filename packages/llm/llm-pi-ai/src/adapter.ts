@@ -64,6 +64,8 @@ import { toPiContext } from './context.ts'
 import { createModels, getSupportedThinkingLevels } from './models.ts'
 import { toStreamChunks } from './stream.ts'
 import { runWebSearch, webSearchFamily } from './web-search.ts'
+import { emulatedClientFor, emulatedSessionId, emulationHeaders, emulationPayload } from './client-emulation.ts'
+import type { EmulatedClient, ResolvedClientEmulation } from './client-emulation.ts'
 
 /** One resolution's frozen view: the profiles and the collection built from them. */
 interface PiAiSnapshot {
@@ -104,6 +106,8 @@ export interface PiAiAdapterOptions {
    * conversion because its stored replay state is unusable by this build.
    */
   onReplayDegrade?: (detail: { provider: string; model: string; reason: string }) => void
+  /** Resolved Claude Code / Codex CLI emulation; omission sends Harness attribution unchanged. */
+  clientEmulation?: ResolvedClientEmulation
 }
 
 /** The two auth injectables a pi-ai collection is built with. */
@@ -218,14 +222,43 @@ function toolUpdateInfo(model: Model<Api>): Pick<LlmResolvedModelInfo, 'toolUpda
     : {}
 }
 
-/** Merge deployment headers while removing case-insensitive attribution collisions. */
-function requestHeaders(headers: Readonly<Record<string, string>> | undefined): Record<string, string> {
-  const attribution = attributionHeaders()
-  const reserved = new Set(Object.keys(attribution).map(name => name.toLowerCase()))
+/**
+ * Merge deployment headers while removing case-insensitive collisions with the
+ * owned headers: the emulated client's identity when emulation applies,
+ * otherwise Harness attribution.
+ */
+function requestHeaders(
+  headers: Readonly<Record<string, string>> | undefined,
+  emulated?: Readonly<Record<string, string | null>>,
+): Record<string, string | null> {
+  const owned = emulated ?? attributionHeaders()
+  const reserved = new Set(Object.keys(owned).map(name => name.toLowerCase()))
   return {
     ...Object.fromEntries(Object.entries(headers ?? {}).filter(([name]) => !reserved.has(name.toLowerCase()))),
-    ...attribution,
+    ...owned,
   }
+}
+
+/** The emulated client of one request with its session id, when emulation applies to the route protocol. */
+interface RequestEmulation {
+  emulation: ResolvedClientEmulation
+  client: EmulatedClient
+  sessionUuid: string
+}
+
+function requestEmulation(
+  emulation: ResolvedClientEmulation | undefined,
+  model: Model<Api>,
+  sessionId: string | undefined,
+): RequestEmulation | undefined {
+  if (emulation === undefined) return undefined
+  const client = emulatedClientFor(model.api)
+  if (client === undefined) return undefined
+  return { emulation, client, sessionUuid: emulatedSessionId(emulation, sessionId) }
+}
+
+function emulatedHeaders(request: RequestEmulation | undefined): Record<string, string | null> | undefined {
+  return request === undefined ? undefined : emulationHeaders(request.emulation, request.client, request.sessionUuid)
 }
 
 /**
@@ -348,10 +381,14 @@ export class PiAiAdapter extends LlmAdapter {
     // Refuse an unsupported protocol before resolving any credential.
     webSearchFamily(model)
     const apiKey = await this.config.resolveApiKey(request.provider, profile)
+    const emulated = requestEmulation(this.config.clientEmulation, model, undefined)
     return runWebSearch({
       models: snapshot.models,
       model,
-      options: { ...profileOptions(profile, undefined, apiKey), headers: requestHeaders(profile.headers) },
+      options: { ...profileOptions(profile, undefined, apiKey), headers: requestHeaders(profile.headers, emulatedHeaders(emulated)) },
+      ...emulated === undefined
+        ? {}
+        : { transformPayload: payload => emulationPayload(emulated.emulation, emulated.client, payload, emulated.sessionUuid) },
     }, request)
   }
 
@@ -409,15 +446,23 @@ export class PiAiAdapter extends LlmAdapter {
             maxBytes: profile.requestImageMaxBytes,
           },
         }, onReplayDegrade)
+      const emulated = requestEmulation(
+        this.config.clientEmulation,
+        model,
+        options.sessionId === undefined ? undefined : String(options.sessionId),
+      )
       const events = snapshot.models.streamSimple(model, context, {
         ...profileOptions(profile, reasoning, apiKey),
         ...options.temperature === undefined ? {} : { temperature: options.temperature },
         ...options.maxTokens === undefined ? {} : { maxTokens: options.maxTokens },
         ...options.sessionId === undefined ? {} : { sessionId: String(options.sessionId) },
         signal: watchdog.signal,
-        // Profile headers are deployment-owned; attribution names are
-        // Harness-owned and therefore win collisions.
-        headers: requestHeaders(profile.headers),
+        // Profile headers are deployment-owned; attribution or emulated
+        // client names are Harness-owned and therefore win collisions.
+        headers: requestHeaders(profile.headers, emulatedHeaders(emulated)),
+        ...emulated === undefined
+          ? {}
+          : { onPayload: (payload: unknown) => emulationPayload(emulated.emulation, emulated.client, payload, emulated.sessionUuid) },
       })
       const iterator = toStreamChunks(events, model.contextWindow, options.signal, model.id)[Symbol.asyncIterator]()
       let exhausted = false
