@@ -83,6 +83,18 @@ function isTrustedAuthority(hostUrl: URL, trustedHosts: readonly string[]): bool
 }
 
 /**
+ * Whether one page authority matches a configured authority list, with the
+ * same exact-port and port-less semantics as `trustedHosts`.
+ * @param authority - the page authority (`location.host`).
+ * @param entries - configured bare authorities.
+ * @returns true when an entry matches; false for an unparsable authority.
+ */
+export function matchesAuthority(authority: string, entries: readonly string[]): boolean {
+  const hostUrl = parseAuthority(authority)
+  return hostUrl !== undefined && isTrustedAuthority(hostUrl, entries)
+}
+
+/**
  * Decide whether one /api request may reach the RPC bridge.
  * @param request - Node HTTP or Fetch request facts (headers).
  * @param trustedHosts - non-loopback authorities this deployment serves: exact `host:port`, or port-less `host` matching any port.

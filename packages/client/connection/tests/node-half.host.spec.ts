@@ -214,6 +214,22 @@ describe('connection node half', () => {
     }
   })
 
+  it('injects configured privileged authorities for the browser half', async () => {
+    const { ctx, dispose } = await mounted({ privilegedHosts: ['dsh.example.com'] })
+    try {
+      const rows: IndexInjection[] = []
+      ctx.emit('webserver/index-inject', rows)
+      expect(rows).toContainEqual({ kind: 'global', name: '__DSH_PRIVILEGED_HOSTS__', value: ['dsh.example.com'] })
+    } finally {
+      await dispose()
+    }
+  })
+
+  it('rejects a privileged authority that is not a bare host[:port]', async () => {
+    const ctx = new Context()
+    await expect(apply(ctx, { privilegedHosts: ['https://dsh.example.com/'] })).rejects.toThrow(/bare host/)
+  })
+
   it.each([
     { recovery: { backoffBaseMs: 0 }, error: /backoffBaseMs/ },
     { recovery: { backoffFactor: NaN }, error: /backoffFactor.*finite/ },

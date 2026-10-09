@@ -1,7 +1,16 @@
 /** Behavior of the /api browser-trust fence (rebinding + cross-site defense). */
 
 import { describe, expect, it } from 'vitest'
-import { assertTrustedAuthority, isTrustedApiRequest } from '../src/api-request-trust.ts'
+import { assertTrustedAuthority, isTrustedApiRequest, matchesAuthority } from '../src/api-request-trust.ts'
+
+describe('matchesAuthority', () => {
+  it('matches exact-port and port-less entries and refuses unparsable authorities', () => {
+    expect(matchesAuthority('dsh.example.com', ['dsh.example.com'])).toBe(true)
+    expect(matchesAuthority('dsh.example.com:8443', ['dsh.example.com'])).toBe(true)
+    expect(matchesAuthority('dsh.example.com:8443', ['dsh.example.com:443'])).toBe(false)
+    expect(matchesAuthority('[bad', ['dsh.example.com'])).toBe(false)
+  })
+})
 
 function request(headers: Record<string, string | undefined>): { headers: Record<string, string | undefined> } {
   return { headers }

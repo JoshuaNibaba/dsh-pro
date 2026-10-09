@@ -10,6 +10,7 @@ import {
 } from './connection.ts'
 import { createWebConnectionRpc, type RpcFetch, type RpcStreamOpen } from './rpc.ts'
 import { isLoopbackHostname } from '../loopback-hostname.ts'
+import { matchesAuthority } from '../api-request-trust.ts'
 import type { ClientConnectionRpc } from '../rpc.ts'
 import { resolveConnectionConfig } from '../recovery-config.ts'
 
@@ -110,11 +111,14 @@ export interface ClientTransportHooks {
 interface ClientTransportGlobal {
   __DSH_TRANSPORT__?: ClientTransportHooks
   __DSH_CONNECTION_RECOVERY__?: unknown
+  __DSH_PRIVILEGED_HOSTS__?: unknown
 }
 
 /** Browser location fields used to classify loopback authority. */
 export interface ConnectionLocation {
   readonly hostname: string
+  /** Page authority (`hostname[:port]`), matched against privileged authorities. */
+  readonly host?: string
 }
 
 /** Instance-local inputs for installing a Connection service. */
@@ -125,6 +129,8 @@ export interface ConnectionInstallOptions {
   readonly recovery?: ConnectionRecoveryConfig
   /** Page location; omit for a non-browser composition. */
   readonly location?: ConnectionLocation
+  /** Non-loopback page authorities that reach the privileged surface. */
+  readonly privilegedHosts?: readonly string[]
 }
 
 /**
@@ -134,7 +140,7 @@ export interface ConnectionInstallOptions {
 export interface ConnectionHandle {
   /**
    * Whether the privileged surface is reachable: the page authority is
-   * loopback, the transport declares the page owns the Host
+   * loopback or a Host-configured `privilegedHosts` entry, the transport declares the page owns the Host
    * ({@link ClientTransportHooks.ownsHost}), or the context is not a browser.
    */
   readonly isLoopback: boolean
@@ -245,7 +251,10 @@ export function installConnection(ctx: Context, options: ConnectionInstallOption
     publishState(undefined)
   }
   const handle: ConnectionHandle = {
-    isLoopback: transport?.ownsHost === true || pageLocation === undefined || isLoopbackHostname(pageLocation.hostname),
+    isLoopback: transport?.ownsHost === true
+      || pageLocation === undefined
+      || isLoopbackHostname(pageLocation.hostname)
+      || (pageLocation.host !== undefined && matchesAuthority(pageLocation.host, options.privilegedHosts ?? [])),
     generation: {
       getSnapshot: () => generation,
       subscribe: (listener) => {
@@ -310,6 +319,11 @@ export function installConnection(ctx: Context, options: ConnectionInstallOption
   ctx.provide('connection', handle)
 }
 
+/** Validate the Host-injected privileged authority list; anything else grants nothing. */
+function privilegedHostsOf(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === 'string') : []
+}
+
 /**
  * Client plugin body: read the page composition and install its Connection service.
  * @param ctx - client Cordis context.
@@ -322,5 +336,6 @@ export function apply(ctx: Context): void {
     ...(transport === undefined ? {} : { transport }),
     recovery: resolveConnectionConfig(globals.__DSH_CONNECTION_RECOVERY__),
     ...(pageLocation === undefined ? {} : { location: pageLocation }),
+    privilegedHosts: privilegedHostsOf(globals.__DSH_PRIVILEGED_HOSTS__),
   })
 }

@@ -15,7 +15,7 @@ import {
 } from '../src/client/index.ts'
 
 type Win = {
-  location?: { hostname: string; origin?: string }
+  location?: { hostname: string; host?: string; origin?: string }
   __DSH_TRANSPORT__?: ClientTransportHooks
 }
 
@@ -131,6 +131,20 @@ describe('connection client apply', () => {
 
   it('reports non-loopback page authority through the connection handle', async () => {
     ;(globalThis as Win).location = { hostname: '192.0.2.20' }
+    expect((await mount()).isLoopback).toBe(false)
+  })
+
+  it('treats a Host-declared privileged authority as the privileged surface', async () => {
+    ;(globalThis as Win).location = { hostname: 'dsh.example.com', host: 'dsh.example.com' }
+    vi.stubGlobal('__DSH_PRIVILEGED_HOSTS__', ['dsh.example.com', 42])
+    expect((await mount()).isLoopback).toBe(true)
+  })
+
+  it('keeps other remote authorities unprivileged', async () => {
+    ;(globalThis as Win).location = { hostname: 'other.example.com', host: 'other.example.com' }
+    vi.stubGlobal('__DSH_PRIVILEGED_HOSTS__', ['dsh.example.com'])
+    expect((await mount()).isLoopback).toBe(false)
+    vi.stubGlobal('__DSH_PRIVILEGED_HOSTS__', 'other.example.com')
     expect((await mount()).isLoopback).toBe(false)
   })
 
