@@ -52,6 +52,9 @@ CUSTOM_TESTS=(
   packages/experimental/kanban-bundle
   packages/experimental/client-ui-kanban
   packages/client/ui-conversation/tests/skeleton.client.spec.tsx
+  packages/client/ui-settings-models/tests/welcome-notice.client.spec.tsx
+  packages/client/ui-theme-pack
+  scripts/verify-default-product-isolation.spec.ts
 )
 
 die() { echo "dsh-custom: $*" >&2; exit 1; }
