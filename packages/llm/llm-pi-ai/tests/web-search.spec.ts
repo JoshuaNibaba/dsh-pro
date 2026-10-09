@@ -197,7 +197,9 @@ describe('observing fetch', () => {
 describe('PiAiAdapter.webSearch', () => {
   it('sends a Claude Code-style auxiliary request and returns ordered commentary and links', async () => {
     const server = await sseServer(anthropicEvents)
-    const adapter = adapterOf({ anthropic: { baseURL: server.url } })
+    // Long retention on the route must not reach the search request: a relay
+    // that prepends default-ttl system blocks rejects 1h markers behind them.
+    const adapter = adapterOf({ anthropic: { baseURL: server.url, cacheRetention: 'long' } })
     const records: LlmWebSearchRequestRecord[] = []
     const result = await adapter.webSearch({
       provider: 'anthropic',
@@ -217,11 +219,12 @@ describe('PiAiAdapter.webSearch', () => {
     const sent = server.requests[0]?.body
     expect(sent).toMatchObject({
       model: 'claude-haiku-4-5',
-      messages: [{ role: 'user', content: [{ type: 'text', text: `${WEB_SEARCH_USER_PREFIX}dsh harness` }] }],
+      messages: [{ role: 'user', content: `${WEB_SEARCH_USER_PREFIX}dsh harness` }],
       tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: ANTHROPIC_WEB_SEARCH_MAX_USES }],
       tool_choice: { type: 'tool', name: 'web_search' },
     })
     expect(JSON.stringify(sent?.['system'])).toContain(WEB_SEARCH_SYSTEM_PROMPT)
+    expect(JSON.stringify(sent)).not.toContain('cache_control')
     expect(records).toHaveLength(1)
     expect(records[0]).toMatchObject({
       provider: 'anthropic', model: 'claude-haiku-4-5', api: 'anthropic-messages',

@@ -285,6 +285,11 @@ export async function runWebSearch(dispatch: WebSearchDispatch, request: LlmWebS
   }
   const events = dispatch.models.streamSimple(model, context, {
     ...dispatch.options,
+    // A one-shot search has nothing worth caching, and a relay that prepends
+    // its own default-ttl (5m) system blocks would reject the route's 1h
+    // markers behind them: "a ttl='1h' cache_control block must not come
+    // after a ttl='5m' cache_control block".
+    cacheRetention: 'none',
     ...request.signal === undefined ? {} : { signal: request.signal },
     // The response copy is read from the HTTP body; a WebSocket would bypass it.
     ...model.api === 'openai-codex-responses' ? { transport: 'sse' as const } : {},
