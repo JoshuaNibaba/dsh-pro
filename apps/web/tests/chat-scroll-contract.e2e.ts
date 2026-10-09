@@ -5,7 +5,7 @@
 import { access, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { Browser, Page } from 'playwright'
+import type { Browser, Locator, Page } from 'playwright'
 import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { StreamChunk } from '@deepseek-ai/dsh-llm'
@@ -288,7 +288,35 @@ async function loadedFlowRows(page: Page): Promise<number> {
   return page.locator('[data-chat-flow-key]').count()
 }
 
+/**
+ * Open the phone-layout sidebar drawer. Several "Open sidebar" controls stay
+ * mounted (the sidebar's own toggle, the frame's leading seat, the Session
+ * header); the one a person can tap is the control on top at its own centre.
+ * @param page - the scenario page.
+ */
+async function reachable(control: Locator): Promise<boolean> {
+  return await control.isVisible() && control.evaluate((element) => {
+    const rect = element.getBoundingClientRect()
+    const hit = document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2)
+    return hit !== null && element.contains(hit)
+  })
+}
+
+async function openSidebarDrawer(page: Page): Promise<void> {
+  const controls = page.getByRole('button', { name: 'Open sidebar', exact: true })
+  for (let index = await controls.count() - 1; index >= 0; index -= 1) {
+    const control = controls.nth(index)
+    if (!await reachable(control)) continue
+    await control.click()
+    await expect.poll(() => reachable(page.getByRole('button', { name: 'Search sessions' })), { timeout: 10_000 }).toBe(true)
+    return
+  }
+  throw new Error('no reachable Open sidebar control')
+}
+
 async function openSeed(page: Page, fixture: ChatScrollFixture, tailMarker?: string): Promise<void> {
+  // Below 768px the sidebar is a drawer that closes after navigation.
+  if (!await reachable(page.getByRole('button', { name: 'Search sessions' }))) await openSidebarDrawer(page)
   // Search collapsed into a header action; expand it before filling.
   const searchButton = page.getByRole('button', { name: 'Search sessions' })
   if (await searchButton.getAttribute('aria-expanded') !== 'true') await searchButton.click()
@@ -344,9 +372,23 @@ async function flingTranscript(page: Page, deltaY: number): Promise<void> {
   await nextPaint(page)
 }
 
-async function wheelToHistoryStart(page: Page): Promise<void> {
-  for (let attempt = 0; attempt < 12; attempt += 1) {
-    if ((await scrollGeometry(page)).scrollTop <= 1) break
+/**
+ * Wheel to the top of the loaded transcript. DSH Pro's Chat requests one older
+ * page by itself when the reader nears the top, and each prepended page keeps
+ * the reader anchor, so by default this waits out every such load and keeps
+ * wheeling until the top holds. `settleLoads: false` stops at the first top
+ * reached, for scenarios that hold the page request open themselves.
+ */
+async function wheelToHistoryStart(page: Page, options: { settleLoads?: boolean } = {}): Promise<void> {
+  const loading = page.getByRole('button', { name: 'Loading…', exact: true })
+  const settle = options.settleLoads ?? true
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    if (settle) await expect.poll(() => loading.count(), { timeout: 30_000 }).toBe(0)
+    if ((await scrollGeometry(page)).scrollTop <= 1) {
+      if (!settle) break
+      await nextPaint(page)
+      if (await loading.count() === 0 && (await scrollGeometry(page)).scrollTop <= 1) break
+    }
     await wheelTranscript(page, -2_400)
   }
   await expect.poll(async () => (await scrollGeometry(page)).scrollTop, { timeout: 10_000 })
@@ -457,6 +499,8 @@ async function loadEarlierWithAnchor(page: Page): Promise<void> {
   await wheelToHistoryStart(page)
   const older = page.getByRole('button', { name: 'Load earlier', exact: true })
   const loading = page.getByRole('button', { name: 'Loading…', exact: true })
+  // Automatic loads near the top may already have reached the first page.
+  if (await older.count() === 0) return
   await older.waitFor({ timeout: 10_000 })
   const anchor = await visibleFlowAnchor(page)
   const before = await loadedFlowRows(page)
@@ -631,9 +675,11 @@ describe('web e2e: long Chat scroll contract', () => {
         await composer.fill(LIVE_TEXT_PROMPT)
         await world.page.getByRole('button', { name: 'Send message', exact: true }).click()
         await world.page.getByText(LIVE_TEXT_FIRST, { exact: false }).last().waitFor({ timeout: 15_000 })
-        await wheelToHistoryStart(world.page)
+        // The held request is either the Chat's own load near the top or the click.
+        await wheelToHistoryStart(world.page, { settleLoads: false })
         const beforeRows = await loadedFlowRows(world.page)
-        await world.page.getByRole('button', { name: 'Load earlier', exact: true }).click()
+        const loadEarlier = world.page.getByRole('button', { name: 'Load earlier', exact: true })
+        if (!held && await loadEarlier.isVisible()) await loadEarlier.click()
         await expect.poll(() => held, { timeout: 10_000 }).toBe(true)
 
         await wheelTranscript(world.page, 420)
@@ -666,7 +712,8 @@ describe('web e2e: long Chat scroll contract', () => {
         await loadEarlierWithAnchor(world.page)
         additionalPages += 1
       }
-      expect(additionalPages).toBeGreaterThan(0)
+      // The Chat's own loads near the top may have fetched every page already,
+      // so the manual count can be zero; the checks below assert the result.
       // The whole log is loaded: turn 1's unique marker renders in the
       // transcript (scoped: the sidebar search row also carries it) and no
       // page remains.
@@ -1008,9 +1055,8 @@ describe('web e2e: long Chat scroll contract', () => {
       await world.page.getByRole('tab', { name: 'Trajectory', exact: true }).click()
       await world.page.getByLabel('Trajectory timeline').waitFor({ timeout: 30_000 })
       await world.page.setViewportSize({ width: 700, height: 900 })
-      // The narrow breakpoint auto-collapses the sidebar. Re-open it because
-      // this scenario switches sessions while pinning the narrow Chat scroll owner.
-      await world.page.getByRole('button', { name: 'Open sidebar', exact: true }).click()
+      // The narrow breakpoint collapses the sidebar into a drawer; openSeed
+      // reopens it for each Session switch.
       await world.page.getByRole('tab', { name: 'Chat', exact: true }).click()
       await nextPaint(world.page)
       await expectSameFlowTop(world.page, sessionAnchor, RESPONSIVE_REFLOW_TOLERANCE)

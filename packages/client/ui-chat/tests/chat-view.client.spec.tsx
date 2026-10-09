@@ -494,6 +494,17 @@ function makeHarness(
 
 /** Simulate reader input (any device): a delivered position that deviates
  * from the observed-top ledger of programmatic writes. */
+/**
+ * Visible flow rows of a Chat column in committed order; jsdom layout stand-ins position rows by this index.
+ * @param column - the `[data-chat-flow]` element.
+ * @returns mounted, shown, non-empty flow rows.
+ */
+function visibleFlowRows(column: HTMLElement): HTMLElement[] {
+  return [...column.children].filter((element): element is HTMLElement =>
+    element instanceof HTMLElement && element.hasAttribute('data-chat-flow-key')
+    && !element.hasAttribute('hidden') && !element.matches(':empty'))
+}
+
 function readerScroll(element: HTMLElement, top: number): void {
   fireEvent.wheel(element)
   element.scrollTop = top
@@ -1439,9 +1450,7 @@ describe('ChatView', () => {
     const first = hasSteering ? view.container.querySelector<HTMLElement>('[data-chat-node-key="fixture:steering:5"]')! : answer
     const control = view.container.querySelector<HTMLElement>('[data-chat-node-key="fixture:turn-process:1"]')!
     // jsdom has no layout; positions follow the actual committed row order and hidden state.
-    const visibleRows = () => [...column.children].filter((element): element is HTMLElement =>
-      element instanceof HTMLElement && element.hasAttribute('data-chat-flow-key')
-      && !element.hasAttribute('hidden') && !element.matches(':empty'))
+    const visibleRows = () => visibleFlowRows(column)
     Object.defineProperties(scroller, {
       clientHeight: { value: 200 },
       scrollHeight: { get: () => 40 + visibleRows().length * 40 },
@@ -4009,6 +4018,44 @@ describe('ChatView', () => {
     expect(h.loadOlder).toHaveBeenCalledTimes(1)
     act(() => { h.setSession({ loadingOlder: true }) })
     expect(view.getByText('加载中…')).toBeTruthy()
+  })
+
+  it('releases an automatic page anchor after its prepend so scrolling without intent events stays with the reader', () => {
+    const later = [user(7, 'u7'), assistant(8, 'a8'), user(9, 'u9'), assistant(10, 'a10'), user(11, 'u11'), assistant(12, 'a12')]
+    const h = makeHarness({ nodes: later }, { hasMore: true })
+    const view = render(<h.ChatView {...h.props} />)
+    const column = view.container.querySelector<HTMLElement>('[data-chat-flow]')!
+    const scroller = column.parentElement as HTMLDivElement
+    // jsdom has no layout: every visible flow row is 40px tall, in committed order.
+    const rows = () => visibleFlowRows(column)
+    let top = 0
+    Object.defineProperties(scroller, {
+      clientHeight: { value: 200 },
+      scrollHeight: { get: () => 40 + rows().length * 40 },
+      scrollTop: {
+        get: () => top,
+        set: (value: number) => { top = Math.max(0, Math.min(value, 40 + rows().length * 40 - 200)) },
+      },
+    })
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      if (this === scroller) return new DOMRect(0, 0, 500, 200)
+      const index = rows().indexOf(this)
+      return new DOMRect(0, 40 + index * 40 - top, 500, index < 0 ? 0 : 40)
+    })
+    readerScroll(scroller, 40)
+    expect(h.loadOlder).toHaveBeenCalledTimes(1)
+    act(() => {
+      h.setChat({ nodes: [user(1, 'u1'), assistant(2, 'a2'), user(3, 'u3'), assistant(4, 'a4'), ...later] })
+      h.setSession({ hasMore: false })
+    })
+    // The prepend keeps the row the reader saw in place: four rows above it.
+    expect(top).toBe(40 + 4 * 40)
+    // Momentum scrolling: a position change with no wheel, touch, or key intent.
+    top = 120
+    fireEvent.scroll(scroller)
+    fireEvent(scroller, new Event('scrollend'))
+    act(() => { h.setChat({ nodes: [user(1, 'u1'), assistant(2, 'a2'), user(3, 'u3'), assistant(4, 'a4'), ...later, assistant(13, 'streaming')] }) })
+    expect(top).toBe(120)
   })
 
   it('loads older history once per window head when a reader settles within one viewport of the top', () => {

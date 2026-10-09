@@ -88,7 +88,7 @@ it('places dynamic Session menu rows by order among the shipped ones and removes
   }
 }, 120_000)
 
-it('synchronizes two pages, disposes effects and restores an offline page from the latest graph without navigation', async () => {
+it('synchronizes two pages, disposes effects and reloads an offline page that reconnects to another graph', async () => {
   const scaffold = await launchWebScaffold({
     extraInstallAnchors: [join(FIXTURE, 'package.json')],
   })
@@ -161,10 +161,14 @@ it('synchronizes two pages, disposes effects and restores an offline page from t
     await toggle()
     await expect.poll(() => live(page).count()).toBe(0)
     expect(await live(other).count()).toBe(1)
+    // DSH Pro: a page whose first graph after reconnecting differs from the one it
+    // runs reloads instead of replacing its plugins in place, so the offline page
+    // navigates once and comes back on the latest graph; page-local drafts go with it.
+    const reloaded = other.waitForEvent('framenavigated')
     await otherContext.setOffline(false)
+    await reloaded
     await expect.poll(() => live(other).count(), { timeout: 20_000 }).toBe(0)
-    expect(await draft.inputValue()).toBe('unfinished-filter')
-    expect(navigations).toBe(0)
+    expect(navigations).toBe(1)
     expect(scaffold.ctx.loader.ctx.fiber.uid).toBe(host)
     for (const console of consoles) expect(console.pageErrors).toEqual([])
   } finally {

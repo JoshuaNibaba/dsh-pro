@@ -23,7 +23,7 @@ const UI_EXPECTED = fileURLToPath(new URL('./expected/stats-paged-history/ui.exp
 const MODE = webSnapshotMode()
 const SEED_ID = 'stats-paged-history-web-e2e'
 
-/** Turn count: 2 chat messages per turn, so 28 turns overflow one 50-message page. */
+/** Turn count: 2 chat messages per turn, so 28 turns span many three-Turn history windows. */
 const TURNS = 28
 const FULL_COUNTS = `${TURNS} turns ${TURNS} steps`
 
@@ -117,18 +117,23 @@ describe('web e2e: whole-session stats survive history paging', () => {
     await sessionRow.click()
     // Settled barrier: the newest recorded reply renders from the tail page.
     await expect.poll(() => page.getByText(`r${TURNS}`, { exact: true }).count(), { timeout: 15_000 }).toBe(1)
-    // The tail page is partial (56 messages > one 50-message page): the first
-    // turns are NOT loaded, yet the strip already reports the whole log —
-    // the sessionStats projection, not the window fold.
+    // The tail window is partial (it ends after three Turns): the first turns
+    // are NOT loaded, yet the strip already reports the whole log — the
+    // sessionStats projection, not the window fold.
     expect(await page.getByText('m1', { exact: true }).count()).toBe(0)
     await expect.poll(() => page.getByText(FULL_COUNTS, { exact: false }).count(), { timeout: 10_000 }).toBe(1)
     const strip = page.getByText(FULL_COUNTS, { exact: false }).locator('..')
     const stripBeforePaging = await strip.textContent()
 
-    // 加载更早: prepending the older page must not move ANY strip figure —
-    // counts, wall times, or token groups.
-    await page.getByRole('button', { name: 'Load earlier' }).click()
-    await expect.poll(() => page.getByText('m1', { exact: true }).count(), { timeout: 10_000 }).toBe(1)
+    // 加载更早: prepending older pages must not move ANY strip figure —
+    // counts, wall times, or token groups. Windows hold three Turns and the
+    // Chat also loads one page on its own near the top, so page until m1.
+    const loadEarlier = page.getByRole('button', { name: 'Load earlier' })
+    await expect.poll(async () => {
+      if (await loadEarlier.isVisible()) await loadEarlier.click()
+      expect(await strip.textContent()).toBe(stripBeforePaging)
+      return page.getByText('m1', { exact: true }).count()
+    }, { timeout: 30_000, interval: 250 }).toBe(1)
     expect(await strip.textContent()).toBe(stripBeforePaging)
     // With the whole log loaded, the window mounts one turn-tail footer per
     // settled turn — the loaded-window probe the scroll/perf lanes count now

@@ -28,6 +28,8 @@ export class ChatNavigation {
   private settleFrame: number | null = null
   /** Window head of the last automatic request; a failed page leaves the head unchanged and is not retried. */
   private autoHead: ChatNavigationInput['firstSeq'] | undefined = undefined
+  /** Whether the retained paging anchor belongs to an automatic request and ends with its page's commit. */
+  private autoPaging = false
 
   constructor(
     private readonly viewport: ChatViewport,
@@ -62,6 +64,7 @@ export class ChatNavigation {
   private clearTask(): void {
     this.cancelFrame()
     this.jump = null
+    this.autoPaging = false
     this.viewport.stopPreserving()
   }
 
@@ -113,8 +116,12 @@ export class ChatNavigation {
     const scroll = this.viewport.readScroll()
     if (scroll === null || scroll.metrics.top >= scroll.metrics.height) return
     this.autoHead = firstSeq
-    if (this.reading.followingTail) this.input.loadOlder()
-    else this.loadEarlier()
+    if (this.reading.followingTail) {
+      this.input.loadOlder()
+      return
+    }
+    this.loadEarlier()
+    this.autoPaging = true
   }
 
   /**
@@ -136,6 +143,13 @@ export class ChatNavigation {
     const landing = this.viewport.preserve()
     if (landing === null) return false
     this.reading.preservePosition(landing)
+    // An automatic page keeps the reader in place only across its own prepend.
+    // Holding the anchor longer would undo scrolling that sends no intent
+    // events, such as touch momentum, on every later streaming commit.
+    if (this.autoPaging && !this.input.loadingOlder) {
+      this.autoPaging = false
+      this.viewport.stopPreserving()
+    }
     return true
   }
 

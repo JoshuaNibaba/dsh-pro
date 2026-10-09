@@ -1,6 +1,7 @@
 // Browser geometry for the input card across Chat and Trajectory. The browser
-// must expose layout-consuming scrollbars, and an uncompensated control keeps
-// equal rectangles from passing vacuously.
+// must expose layout-consuming scrollbars. The composer belongs to Chat: the
+// Trajectory view renders without it, and returning to Chat restores the card
+// where it was.
 import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
 import type { Browser, Page } from 'playwright'
@@ -62,18 +63,6 @@ async function setMeasuredViewport(
   })
 }
 
-/**
- * The uncompensated cascade, injected into the page: the overlay seat's `right`
- * compensation dropped to 0, so it measures the full padding box while Chat's
- * seat still rides the reserved content box. `!important` beats the module
- * rules without a rebuild, and the id lets the control be lifted again in the
- * same session.
- */
-const CONTROL_STYLE_ID = 'composer-tab-geometry-control'
-const CONTROL_CSS = `
-[data-conversation-scroll]:has([data-conversation-composer-overlay]) > [data-composer-seat] { right: 0 !important; }
-`
-
 /** The column scroller and the input card as the browser lays them out, in one tab. */
 interface TabMetrics {
   gutter: string
@@ -81,12 +70,14 @@ interface TabMetrics {
   overflowY: string
   band: number
   scrolls: boolean
+  /** Whether the input card is laid out (Chat) or hidden with its seat (other views). */
+  cardShown: boolean
   cardLeft: number
   cardRight: number
   cardWidth: number
 }
 
-/** One tab's metrics beside the other's, plus the distances between them. */
+/** Chat, then Trajectory, then Chat again, plus the card's distances between the two Chat visits. */
 interface TabComparison {
   chat: TabMetrics
   trajectory: TabMetrics
@@ -115,6 +106,7 @@ function measureTab(page: Page): Promise<TabMetrics> {
       overflowY: style.overflowY,
       band: hostRect.width - host.clientWidth,
       scrolls: host.scrollHeight > host.clientHeight,
+      cardShown: card.getClientRects().length > 0,
       cardLeft: cardRect.left,
       cardRight: cardRect.right,
       cardWidth: cardRect.width,
@@ -139,9 +131,9 @@ async function showTab(page: Page, tab: 'Chat' | 'Trajectory'): Promise<void> {
 }
 
 /**
- * Measure both tabs and the distances between them, leaving Chat shown.
+ * Measure Chat, Trajectory, and Chat again, leaving Chat shown.
  * @param page - the page under test.
- * @returns each tab's metrics and the card's displacement between them.
+ * @returns each tab's metrics and the card's displacement between the two Chat visits.
  */
 async function compareTabs(page: Page): Promise<TabComparison> {
   await showTab(page, 'Chat')
@@ -149,33 +141,13 @@ async function compareTabs(page: Page): Promise<TabComparison> {
   await showTab(page, 'Trajectory')
   const trajectory = await measureTab(page)
   await showTab(page, 'Chat')
+  const back = await measureTab(page)
   return {
     chat,
     trajectory,
-    leftShift: Math.abs(trajectory.cardLeft - chat.cardLeft),
-    rightShift: Math.abs(trajectory.cardRight - chat.cardRight),
-    widthShift: Math.abs(trajectory.cardWidth - chat.cardWidth),
-  }
-}
-
-/**
- * Run the uncompensated cascade in the page for one measurement, then lift it:
- * the overlay seat's `right` compensation dropped to 0, so it measures the
- * full padding box while Chat's seat still rides the reserved content box.
- * @param page - the page under test.
- * @returns the comparison as the column lays out without the compensation.
- */
-async function compareTabsWithoutCompensation(page: Page): Promise<TabComparison> {
-  await page.evaluate(({ id, css }) => {
-    const style = document.createElement('style')
-    style.id = id
-    style.textContent = css
-    document.head.append(style)
-  }, { id: CONTROL_STYLE_ID, css: CONTROL_CSS })
-  try {
-    return await compareTabs(page)
-  } finally {
-    await page.evaluate((id) => { document.getElementById(id)?.remove() }, CONTROL_STYLE_ID)
+    leftShift: Math.abs(back.cardLeft - chat.cardLeft),
+    rightShift: Math.abs(back.cardRight - chat.cardRight),
+    widthShift: Math.abs(back.cardWidth - chat.cardWidth),
   }
 }
 
@@ -208,10 +180,9 @@ async function openSeededSession(page: Page): Promise<void> {
  * Render the golden body.
  * @param wide - comparison at the viewport where the card sits at its width cap.
  * @param narrow - comparison at the viewport where the card shrinks with the column.
- * @param control - comparison at the wide viewport with the compensation removed.
  * @returns the golden body, without a trailing newline.
  */
-function renderGeometry(wide: TabComparison, narrow: TabComparison, control: TabComparison): string {
+function renderGeometry(wide: TabComparison, narrow: TabComparison): string {
   const section = (name: string, comparison: TabComparison): string[] => [
     `## ${name}`,
     '',
@@ -221,9 +192,11 @@ function renderGeometry(wide: TabComparison, narrow: TabComparison, control: Tab
     `- Trajectory: scrollbar-gutter ${comparison.trajectory.gutter}, overflow ${comparison.trajectory.overflowX}/${comparison.trajectory.overflowY}`,
     `- Trajectory scroller scrolls: ${String(comparison.trajectory.scrolls)}`,
     `- Trajectory reserved band: ${String(comparison.trajectory.band)}px`,
-    `- input card left edge moves between tabs: ${String(comparison.leftShift)}px`,
-    `- input card right edge moves between tabs: ${String(comparison.rightShift)}px`,
-    `- input card width changes between tabs: ${String(comparison.widthShift)}px`,
+    `- input card shown in Chat: ${String(comparison.chat.cardShown)}`,
+    `- input card shown in Trajectory: ${String(comparison.trajectory.cardShown)}`,
+    `- input card left edge moves after returning to Chat: ${String(comparison.leftShift)}px`,
+    `- input card right edge moves after returning to Chat: ${String(comparison.rightShift)}px`,
+    `- input card width changes after returning to Chat: ${String(comparison.widthShift)}px`,
     '',
   ]
   return [
@@ -231,7 +204,6 @@ function renderGeometry(wide: TabComparison, narrow: TabComparison, control: Tab
     '',
     ...section(`Wide viewport (${String(WIDE_VIEWPORT.width)}px, card at its cap)`, wide),
     ...section(`Narrow viewport (${String(NARROW_VIEWPORT.width)}px, card shrinking with the column)`, narrow),
-    ...section('Wide viewport, seat compensation removed in the page (control)', control),
   ].join('\n').trimEnd()
 }
 
@@ -292,56 +264,32 @@ describe('web e2e: input card position across view tabs', () => {
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)
 
-  it('holds the input card in place when the tab changes', async () => {
+  it('hides the input card in Trajectory and restores it in place in Chat', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-composer-tab-geometry-wide'))
     await setMeasuredViewport(page, WIDE_VIEWPORT, false)
     const comparison = await compareTabs(page)
-    // The reported symptom as a number. At this viewport the card sits at its
-    // width cap, so the uncompensated cascade's shift shows up as a centring
-    // difference — half the band on each edge — rather than as a width change.
+    expect(comparison.chat.cardShown).toBe(true)
+    expect(comparison.trajectory.cardShown).toBe(false)
     expect(comparison.leftShift).toBe(0)
     expect(comparison.rightShift).toBe(0)
     expect(comparison.widthShift).toBe(0)
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)
 
-  it('holds the input card in place at a viewport where it shrinks with the column', async () => {
+  it('restores the input card in place at a viewport where it shrinks with the column', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-composer-tab-geometry-narrow'))
     await setMeasuredViewport(page, WIDE_VIEWPORT, false)
     const capped = await measureTab(page)
     await setMeasuredViewport(page, NARROW_VIEWPORT, true)
     const comparison = await compareTabs(page)
-    // The other geometry, and a different failure: below the cap the card takes
-    // the column's width, so an unreserved gutter changes its WIDTH by the whole
-    // band instead of shifting it by half. Asserted against the capped
-    // measurement rather than against the cap's pixel value, which belongs to
-    // the stylesheet.
+    // Below the cap the card takes the column's width; returning from
+    // Trajectory must restore that width, not the capped one.
     expect(comparison.chat.cardWidth).toBeLessThan(capped.cardWidth)
+    expect(comparison.trajectory.cardShown).toBe(false)
     expect(comparison.leftShift).toBe(0)
     expect(comparison.rightShift).toBe(0)
     expect(comparison.widthShift).toBe(0)
     await setMeasuredViewport(page, WIDE_VIEWPORT, false)
-    expect(tripwire.pageErrors).toEqual([])
-  }, 60_000)
-
-  it('moves the card again once the seat compensation is removed in the page', async () => {
-    onTestFailed(() => saveFailureShot(page, 'web-e2e-composer-tab-geometry-control'))
-    await setMeasuredViewport(page, WIDE_VIEWPORT, false)
-    // The control: without it, equal rectangles could also mean the tab switch
-    // never reached the layout. Under the uncompensated cascade the overlay seat
-    // loses its `right` compensation and measures the full padding box, so the
-    // card moves by half the band on each edge. Chat's own reservation is
-    // untouched — that is the side that must not change.
-    const comparison = await compareTabsWithoutCompensation(page)
-    expect(comparison.chat.gutter).toBe('stable')
-    expect(comparison.chat.band).toBeGreaterThan(0)
-    expect(comparison.trajectory.band).toBe(0)
-    expect(comparison.leftShift).toBe(comparison.chat.band / 2)
-    expect(comparison.rightShift).toBe(comparison.chat.band / 2)
-    // Restoring the sheet restores the compensation, so the control cannot leak
-    // into the remaining measurements.
-    const restored = await compareTabs(page)
-    expect(restored.leftShift).toBe(0)
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)
 
@@ -352,8 +300,7 @@ describe('web e2e: input card position across view tabs', () => {
     await setMeasuredViewport(page, NARROW_VIEWPORT, true)
     const narrow = await compareTabs(page)
     await setMeasuredViewport(page, WIDE_VIEWPORT, false)
-    const control = await compareTabsWithoutCompensation(page)
-    await compareOrRefreshGolden(GEOMETRY_EXPECTED, renderGeometry(wide, narrow, control), MODE)
+    await compareOrRefreshGolden(GEOMETRY_EXPECTED, renderGeometry(wide, narrow), MODE)
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)
 
