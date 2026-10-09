@@ -1,0 +1,414 @@
+/* Decorative illustrations for the DeepSeek Harness Pro welcome pages. Every
+   page shares one stage height so paging never resizes the dialog. */
+
+.stage {
+  position: relative;
+  height: 188px;
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-module-platform);
+  overflow: hidden;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+/* Overview */
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  height: 100%;
+  padding: 16px;
+  box-sizing: border-box;
+}
+
+.tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-layer-1);
+  border: 0.5px solid var(--dsw-alias-border-l1);
+  color: var(--dsw-alias-label-primary);
+  animation: tile-in 480ms ease-out both;
+}
+
+.tile:nth-child(2) { animation-delay: 80ms; }
+.tile:nth-child(3) { animation-delay: 160ms; }
+.tile:nth-child(4) { animation-delay: 240ms; }
+.tile:nth-child(5) { animation-delay: 320ms; }
+.tile:nth-child(6) { animation-delay: 400ms; }
+
+.tileIcon {
+  display: inline-flex;
+  font-size: 20px;
+  color: var(--dsw-alias-state-business-primary);
+}
+
+@keyframes tile-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Kanban: a card is dragged from the plan pool into a Session lane, runs,
+   then settles in Completed. */
+
+.board {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  height: 100%;
+  padding: 12px;
+  box-sizing: border-box;
+}
+
+.column {
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-layer-1);
+  padding: 8px 10px;
+}
+
+.columnTitle {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.card {
+  position: absolute;
+  width: calc((100% - 24px - 20px) / 3 - 16px);
+  box-sizing: border-box;
+  padding: 6px 8px;
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-layer-1);
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-left: 3px solid var(--dsw-alias-state-idle-primary);
+  color: var(--dsw-alias-label-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.planA { left: 20px; top: 88px; }
+.planB { left: 20px; top: 128px; }
+
+.cardDone {
+  border-left-color: var(--dsw-alias-state-success-primary);
+}
+
+.doneA { left: calc(20px + 2 * ((100% - 44px) / 3 + 10px)); top: 88px; }
+
+.moving {
+  z-index: 1;
+  animation: kanban-move 7s ease-in-out infinite;
+}
+
+@keyframes kanban-move {
+  0%, 10% {
+    left: 20px; top: 48px;
+    transform: none; box-shadow: none;
+    border-left-color: var(--dsw-alias-state-idle-primary);
+  }
+  16% { transform: rotate(-2deg) scale(1.04); box-shadow: var(--dsw-shadow-lv2); }
+  34% {
+    left: calc(20px + (100% - 44px) / 3 + 10px); top: 48px;
+    transform: rotate(-2deg) scale(1.04); box-shadow: var(--dsw-shadow-lv2);
+    border-left-color: var(--dsw-alias-state-idle-primary);
+  }
+  40%, 62% {
+    left: calc(20px + (100% - 44px) / 3 + 10px); top: 48px;
+    transform: none; box-shadow: none;
+    border-left-color: var(--dsw-alias-state-business-primary);
+  }
+  76%, 92% {
+    left: calc(20px + 2 * ((100% - 44px) / 3 + 10px)); top: 48px;
+    border-left-color: var(--dsw-alias-state-success-primary);
+    opacity: 1;
+  }
+  100% {
+    left: calc(20px + 2 * ((100% - 44px) / 3 + 10px)); top: 48px;
+    border-left-color: var(--dsw-alias-state-success-primary);
+    opacity: 0;
+  }
+}
+
+/* The pointer grabs the card in the plan pool and releases it in the lane. */
+.pointer {
+  position: absolute;
+  z-index: 2;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  corner-shape: round;
+  background: var(--dsw-alias-state-business-primary);
+  border: 2px solid var(--dsw-alias-bg-layer-1);
+  opacity: 0;
+  animation: kanban-pointer 7s ease-in-out infinite;
+}
+
+@keyframes kanban-pointer {
+  0% { left: 40%; top: 150px; opacity: 0; }
+  8% { left: calc(20px + (100% - 44px) / 3 - 40px); top: 66px; opacity: 1; }
+  16% { left: calc(20px + (100% - 44px) / 3 - 40px); top: 66px; opacity: 1; transform: scale(0.8); }
+  34% { left: calc(30px + 2 * (100% - 44px) / 3 - 40px); top: 66px; opacity: 1; transform: scale(0.8); }
+  40% { left: calc(30px + 2 * (100% - 44px) / 3 - 40px); top: 66px; opacity: 1; transform: none; }
+  48%, 100% { left: calc(30px + 2 * (100% - 44px) / 3 - 40px); top: 150px; opacity: 0; }
+}
+
+/* Remote: Mac and phone reach your server over animated links. */
+
+.remote {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  height: 100%;
+  padding: 0 20px;
+}
+
+.device {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  min-width: 84px;
+  color: var(--dsw-alias-label-primary);
+}
+
+.laptop {
+  position: relative;
+  width: 72px;
+  height: 46px;
+  border-radius: var(--dsw-radius-xs) var(--dsw-radius-xs) 0 0;
+  border: 2px solid var(--dsw-alias-label-tertiary);
+  border-bottom-width: 6px;
+  box-sizing: border-box;
+}
+
+.server {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 54px;
+}
+
+.server i {
+  display: block;
+  height: 14px;
+  border-radius: 4px;
+  border: 2px solid var(--dsw-alias-state-business-primary);
+  box-sizing: border-box;
+  background: radial-gradient(circle at 8px 50%, var(--dsw-alias-state-success-primary) 2px, transparent 3px);
+  animation: server-blink 1.6s steps(1) infinite;
+}
+
+.server i:nth-child(2) { animation-delay: 400ms; }
+.server i:nth-child(3) { animation-delay: 800ms; }
+
+@keyframes server-blink {
+  50% { background: none; }
+}
+
+.phone {
+  position: relative;
+  width: 30px;
+  height: 52px;
+  border-radius: var(--dsw-radius-sm);
+  border: 2px solid var(--dsw-alias-label-tertiary);
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+/* The phone's sidebar drawer slides in and out. */
+.phone i {
+  position: absolute;
+  inset: 0 40% 0 0;
+  background: var(--dsw-alias-bg-layer-1);
+  border-right: 0.5px solid var(--dsw-alias-border-l2);
+  animation: phone-drawer 3.2s ease-in-out infinite;
+}
+
+@keyframes phone-drawer {
+  0%, 20% { transform: translateX(-100%); }
+  45%, 75% { transform: none; }
+  100% { transform: translateX(-100%); }
+}
+
+.link {
+  flex: 1;
+  max-width: 96px;
+  height: 2px;
+  margin-bottom: 30px;
+  background: repeating-linear-gradient(90deg, var(--dsw-alias-state-business-primary) 0 6px, transparent 6px 12px);
+  background-size: 24px 2px;
+  animation: link-flow 900ms linear infinite;
+}
+
+.linkReverse {
+  animation-direction: reverse;
+}
+
+@keyframes link-flow {
+  to { background-position: 24px 0; }
+}
+
+/* Status: a file row offers its download, and the footer reports the server. */
+
+.status {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  height: 100%;
+  padding: 14px 16px 12px;
+  box-sizing: border-box;
+}
+
+.tree {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: min(280px, 100%);
+}
+
+.treeRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 8px;
+  border-radius: var(--dsw-radius-xs);
+  color: var(--dsw-alias-label-primary);
+}
+
+.treeChild {
+  padding-left: 30px;
+}
+
+.treeHover {
+  justify-content: space-between;
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.download {
+  display: inline-flex;
+  font-size: 16px;
+  color: var(--dsw-alias-state-business-primary);
+  animation: download-nudge 1.4s ease-in-out infinite;
+}
+
+@keyframes download-nudge {
+  0%, 100% { transform: none; }
+  50% { transform: translateY(3px); }
+}
+
+.footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 14px;
+  padding-top: 10px;
+  border-top: 0.5px solid var(--dsw-alias-border-l1);
+}
+
+.connected,
+.cpu {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  corner-shape: round;
+  background: var(--dsw-alias-state-success-primary);
+  animation: dot-pulse 2s ease-in-out infinite;
+}
+
+@keyframes dot-pulse {
+  50% { opacity: 0.4; }
+}
+
+.meter {
+  display: inline-block;
+  width: 48px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--dsw-alias-border-l2);
+  overflow: hidden;
+}
+
+.meter span {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: var(--dsw-alias-state-business-primary);
+  animation: meter-load 3s ease-in-out infinite;
+}
+
+@keyframes meter-load {
+  0%, 100% { width: 18%; }
+  35% { width: 46%; }
+  65% { width: 28%; }
+}
+
+/* Speed: the improvements check in one after another. */
+
+.checks {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 10px;
+  height: 100%;
+  margin: 0;
+  padding: 0 20px;
+  list-style: none;
+}
+
+.checks li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--dsw-alias-label-primary);
+  animation: tile-in 480ms ease-out both;
+}
+
+.checks li:nth-child(2) { animation-delay: 150ms; }
+.checks li:nth-child(3) { animation-delay: 300ms; }
+.checks li:nth-child(4) { animation-delay: 450ms; }
+
+.check {
+  display: inline-flex;
+  flex: none;
+  font-size: 16px;
+  color: var(--dsw-alias-state-success-primary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tile,
+  .checks li,
+  .server i,
+  .phone i,
+  .link,
+  .download,
+  .dot,
+  .meter span,
+  .pointer {
+    animation: none;
+  }
+
+  /* Without motion the dragged card rests in the lane as a running task. */
+  .moving {
+    left: calc(20px + (100% - 44px) / 3 + 10px);
+    top: 48px;
+    border-left-color: var(--dsw-alias-state-business-primary);
+    animation: none;
+  }
+
+  .meter span {
+    width: 28%;
+  }
+}

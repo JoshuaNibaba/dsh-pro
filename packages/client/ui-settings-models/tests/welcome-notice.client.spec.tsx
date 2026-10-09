@@ -19,15 +19,12 @@ import type { WelcomeNoticeProps } from '../src/client/WelcomeNotice.tsx'
 import { decodeWelcomeSection, WelcomeNoticeStore } from '../src/client/welcome-store.ts'
 import type { WelcomeSection } from '../src/client/welcome-store.ts'
 import { en, zh } from '../src/client/locales.ts'
+import { PRO_HIGHLIGHTS } from '../src/client/ProHighlights.tsx'
 import {
   WELCOME_NOTICE_ACK_FIELD, WELCOME_NOTICE_SETTINGS_NAMESPACE,
   WELCOME_NOTICE_VERSION,
 } from '../src/onboarding-copy.ts'
 
-const WELCOME_NOTICE_COPY = {
-  en: { title: en.welcomeTitle, body: en.welcomeBody, continueLabel: en.welcomeContinue },
-  zh: { title: zh.welcomeTitle, body: zh.welcomeBody, continueLabel: zh.welcomeContinue },
-}
 
 afterEach(() => {
   cleanup()
@@ -103,27 +100,31 @@ function mount(
   return { ...render(<WelcomeNotice {...props} />), complete, controller, mirror, mutate, appRoot }
 }
 
+const next = (): void => { fireEvent.click(screen.getByRole('button', { name: zh.welcomeNext })) }
+
 describe('WelcomeNotice', () => {
-  it('uses the exact owner copy in both GUI locales', () => {
-    expect(WELCOME_NOTICE_COPY.en).toEqual({
-      title: 'Preview Notice',
-      body: 'DeepSeek Harness 0.2 is still in preview, and many areas need continued improvement and refinement. We welcome feedback and suggestions from all developers and users. The new desktop app now targets a broad range of users, while developer-related advanced features can be enabled in the settings. DeepSeek Harness’s product features and plugin APIs are expected to continue rapid iteration and evolution, and will gradually stabilize over time.\n\nWe look forward to exploring the limits of intelligence together with users and developers around the world, building on open-source, reusable, and composable infrastructure. We welcome everyone to bring their ideas to life with DeepSeek Harness and participate in the community to enrich the plugin ecosystem.',
-      continueLabel: 'Continue',
-    })
-    expect(en.welcomeBody).toBe(WELCOME_NOTICE_COPY.en.body)
-    expect(zh.welcomeBody).toBe(WELCOME_NOTICE_COPY.zh.body)
+  it('owns copy for every highlight page in both GUI locales', () => {
+    expect(en.welcomeTitle).toBe('Welcome to DeepSeek Harness Pro')
+    expect(zh.welcomeTitle).toBe('欢迎使用 DeepSeek Harness Pro')
+    expect(PRO_HIGHLIGHTS.map(page => page.id)).toEqual(['overview', 'kanban', 'remote', 'status', 'speed'])
+    for (const page of PRO_HIGHLIGHTS) {
+      for (const key of [page.headingKey, page.bodyKey]) {
+        expect(en[key].length).toBeGreaterThan(0)
+        expect(zh[key]).not.toBe(en[key])
+      }
+    }
   })
 
-  it('renders one blocking modal action and focuses the title', async () => {
+  it('opens on the overview page with Skip and Next, focusing the title', async () => {
     const h = mount()
-    const dialog = await screen.findByRole('dialog', { name: WELCOME_NOTICE_COPY.zh.title })
-    for (const paragraph of WELCOME_NOTICE_COPY.zh.body.split('\n\n')) {
-      expect(screen.getByText(paragraph, { exact: true })).toBeTruthy()
-    }
-    expect(dialog.querySelectorAll('p')).toHaveLength(2)
-    expect(dialog.querySelectorAll('button')).toHaveLength(1)
-    expect(screen.getByRole('button', { name: WELCOME_NOTICE_COPY.zh.continueLabel })).toBeTruthy()
-    expect(document.activeElement).toBe(screen.getByRole('heading', { name: WELCOME_NOTICE_COPY.zh.title }))
+    const dialog = await screen.findByRole('dialog', { name: zh.welcomeTitle })
+    expect(screen.getByRole('heading', { name: zh.welcomeOverviewHeading })).toBeTruthy()
+    expect(screen.getByText(zh.welcomeOverviewBody, { exact: true })).toBeTruthy()
+    expect([...dialog.querySelectorAll('button')].map(button => button.textContent)).toEqual([zh.welcomeSkip, zh.welcomeNext])
+    expect(screen.getByRole('img', { name: '第 1 页，共 5 页' })).toBeTruthy()
+    expect(dialog.querySelector('[data-highlight="overview"]')?.getAttribute('aria-hidden')).toBe('true')
+    expect(screen.getByText(zh.welcomeOverviewKanban, { exact: true })).toBeTruthy()
+    expect(document.activeElement).toBe(screen.getByRole('heading', { name: zh.welcomeTitle }))
     expect(h.appRoot.inert).toBe(true)
 
     fireEvent.keyDown(document, { key: 'Escape' })
@@ -132,10 +133,44 @@ describe('WelcomeNotice', () => {
     expect(screen.getByRole('dialog')).toBeTruthy()
   })
 
-  it('requires a fresh acknowledgement after the 0.1 notice', async () => {
-    const h = mount('2026-08-13.1')
+  it('pages forward and back through every highlight without acknowledging', async () => {
+    const h = mount()
     await screen.findByRole('dialog')
-    fireEvent.click(screen.getByRole('button', { name: WELCOME_NOTICE_COPY.zh.continueLabel }))
+    next()
+    expect(screen.getByRole('heading', { name: zh.welcomeKanbanHeading })).toBeTruthy()
+    expect(screen.getByText(zh.welcomeKanbanTaskMoving, { exact: true })).toBeTruthy()
+    expect(screen.getByRole('img', { name: '第 2 页，共 5 页' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: zh.welcomeBack }))
+    expect(screen.getByRole('heading', { name: zh.welcomeOverviewHeading })).toBeTruthy()
+    next()
+    next()
+    expect(screen.getByText(zh.welcomeRemoteServer, { exact: true })).toBeTruthy()
+    next()
+    expect(screen.getByText(zh.welcomeStatusFileA, { exact: true })).toBeTruthy()
+    expect(screen.getByText(zh.welcomeStatusLatency, { exact: true })).toBeTruthy()
+    next()
+    expect(screen.getByText(zh.welcomeSpeedSearch, { exact: true })).toBeTruthy()
+    expect([...screen.getByRole('dialog').querySelectorAll('button')].map(button => button.textContent))
+      .toEqual([zh.welcomeBack, zh.welcomeContinue])
+    expect(h.mutate).not.toHaveBeenCalled()
+    expect(h.complete).not.toHaveBeenCalled()
+  })
+
+  it('acknowledges from the last page', async () => {
+    const h = mount()
+    await screen.findByRole('dialog')
+    for (let page = 1; page < PRO_HIGHLIGHTS.length; page++) next()
+    fireEvent.click(screen.getByRole('button', { name: zh.welcomeContinue }))
+    await act(async () => { await Promise.resolve() })
+    expect(h.mutate).toHaveBeenCalledOnce()
+    expect(h.complete).toHaveBeenCalledOnce()
+  })
+
+  it('requires a fresh acknowledgement after the official preview notice, and Skip acknowledges', async () => {
+    const h = mount('2026-09-28.1')
+    await screen.findByRole('dialog')
+    next()
+    fireEvent.click(screen.getByRole('button', { name: zh.welcomeSkip }))
     await act(async () => { await Promise.resolve() })
     expect(h.mutate).toHaveBeenCalledOnce()
     expect(h.complete).toHaveBeenCalledOnce()
@@ -151,14 +186,13 @@ describe('WelcomeNotice', () => {
     expect(h.complete).toHaveBeenCalledOnce()
   })
 
-  it('keeps the sole action disabled while saving and reports a refused write', async () => {
+  it('disables every action while saving and reports a refused write', async () => {
     let resolveWrite!: (value: unknown) => void
     const write = new Promise<unknown>((resolve) => { resolveWrite = resolve })
     const h = mount(undefined, () => write)
     await screen.findByRole('dialog')
-    const action = screen.getByRole<HTMLButtonElement>('button', { name: WELCOME_NOTICE_COPY.zh.continueLabel })
-    fireEvent.click(action)
-    expect(action.disabled).toBe(true)
+    fireEvent.click(screen.getByRole('button', { name: zh.welcomeSkip }))
+    for (const button of screen.getByRole('dialog').querySelectorAll('button')) expect(button.disabled).toBe(true)
     resolveWrite({
       ok: false,
       error: new RemoteError('settings/rejected', 'read only', { ns: WELCOME_NOTICE_SETTINGS_NAMESPACE }),

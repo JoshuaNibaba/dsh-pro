@@ -87,3 +87,24 @@ describe('ModelsSection theme styles', () => {
     expect(css).not.toMatch(/var\(--dsw-[a-z0-9-]+\s*,\s*(?:#|rgb|rgba|hsl|hsla)/)
   })
 })
+
+describe('welcome highlight styles', () => {
+  const sheets = ['ProHighlights.module.css', 'WelcomeNotice.module.css']
+    .map(name => [name, readFileSync(fileURLToPath(new URL(`../src/client/${name}`, import.meta.url)), 'utf8')] as const)
+
+  it.each(sheets)('%s names only declared theme variables and no literal colors', (_name, sheet) => {
+    const named = [...sheet.matchAll(/var\((--(?:dsw|dsh|ds)-[a-z0-9-]+)/g)].map(match => match[1])
+    expect([...new Set(named)].filter(name => !tokens.includes(`  ${String(name)}:`))).toEqual([])
+    expect(sheet).not.toMatch(/#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(/i)
+    const bare = sheet.replace(/\/\*[\s\S]*?\*\//g, '')
+    expect((bare.match(/\}/g) ?? []).length).toBe((bare.match(/\{/g) ?? []).length)
+  })
+
+  it('stops every highlight animation when reduced motion is requested', () => {
+    const sheet = readFileSync(fileURLToPath(new URL('../src/client/ProHighlights.module.css', import.meta.url)), 'utf8')
+    const reduced = sheet.slice(sheet.indexOf('@media (prefers-reduced-motion: reduce)'))
+    const animated = [...sheet.matchAll(/^\.([a-zA-Z]+)(?:[ :][^{]*)?\{[^}]*\banimation:/gm)].map(match => match[1])
+    expect(animated.length).toBeGreaterThan(0)
+    for (const name of new Set(animated)) expect(reduced).toContain(`.${String(name)}`)
+  })
+})

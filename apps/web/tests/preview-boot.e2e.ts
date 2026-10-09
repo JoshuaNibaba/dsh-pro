@@ -313,7 +313,7 @@ async function bootPreview(origin: string, browser: Browser): Promise<void> {
     expect(bootLine).toContain('data overlays=1')
     // The versioned notice is the seeded preview's first stable interactive
     // surface after the startup chain completes over the tunnel.
-    const continueButton = page.getByRole('button', { name: 'Continue' })
+    const continueButton = page.getByRole('button', { name: 'Skip', exact: true })
     await continueButton.waitFor({ timeout: HERO_TIMEOUT_MS })
     await continueButton.click()
     const configureLater = page.getByRole('button', { name: 'Configure later' })

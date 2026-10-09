@@ -122,6 +122,10 @@ Below 768px wide, the left sidebar becomes a drawer and the conversation and com
 
 The `web_search` tool defaults to the search built into the current Session's model (Anthropic `web_search_20250305`; `web_search` for OpenAI, Azure, and Codex Responses), as Claude Code's WebSearch does; DeepSeek models keep DeepSeek's official search. Each search records a `web/model-search-request` Session event.
 
+### First-run welcome
+
+The first time a browser opens DSH Pro, a paged welcome dialog walks through these highlights with short animations, including a card being dragged across the Kanban board. Next and Back page through it, and Skip closes it at any point.
+
 ### Remote connection and load time
 
 | Improvement | Behavior |

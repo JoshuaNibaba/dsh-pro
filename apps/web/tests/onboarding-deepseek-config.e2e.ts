@@ -56,9 +56,7 @@ describe.skipIf(MODE === 'record')('web e2e: first-run DeepSeek credential setup
     for (const paragraph of WELCOME_NOTICE_COPY.zh.body.split('\n\n')) {
       expect(await welcome.getByText(paragraph, { exact: true }).count()).toBe(1)
     }
-    expect(await welcome.getByRole('button').allTextContents()).toEqual([
-      WELCOME_NOTICE_COPY.zh.continueLabel,
-    ])
+    expect(await welcome.getByRole('button').allTextContents()).toEqual([...WELCOME_NOTICE_COPY.zh.firstPageButtons])
     const welcomeAria = await captureStableAria(page, '[role="dialog"]', scaffold.workspaceCwd)
     await compareOrRefreshGolden(WELCOME_EXPECTED, welcomeAria, MODE)
 
@@ -157,7 +155,7 @@ describe.skipIf(MODE === 'record')('web e2e: first-run DeepSeek credential setup
       ;(window as unknown as { __takeoverSightings: string[] }).__takeoverSightings = sightings
       setInterval(() => {
         if (document.querySelector(
-          '[role="dialog"][aria-label="预览版说明"], '
+          '[role="dialog"][aria-label="欢迎使用 DeepSeek Harness Pro"], '
           + '[role="dialog"][aria-label="开始你的创作"], '
           + '[role="dialog"][aria-label="添加一个 API Key 开始使用"]',
         ) !== null) {

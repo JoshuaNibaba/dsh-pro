@@ -132,6 +132,10 @@ ditto -x -k /tmp/DSH-Remote.zip ~/Applications
 
 `web_search` 工具默认使用当前会话所用模型自己的搜索能力(Anthropic `web_search_20250305`;OpenAI、Azure、Codex Responses 的 `web_search`),做法和 Claude Code 的 WebSearch 相同；DeepSeek 模型仍使用 DeepSeek 官方搜索。每次搜索写入 `web/model-search-request` 会话事件。
 
+### 首次打开的欢迎页
+
+第一次打开 DSH Pro 时，会弹出分页的欢迎对话框，用简短的动画介绍上面这些亮点，包括卡片在任务看板上被拖动的过程。用「下一项」「上一项」翻页，随时可以「跳过」。
+
 ### 远程连接与加载速度
 
 | 改进 | 行为 |

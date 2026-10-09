@@ -1,15 +1,21 @@
 .copy {
+  margin-top: 20px;
+  min-height: 96px;
   font-size: 14px;
   line-height: 24px;
   color: var(--dsw-alias-label-secondary);
 }
 
-.copy p {
-  margin: 0;
+.heading {
+  margin: 0 0 6px;
+  font-size: 16px;
+  line-height: 24px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-primary);
 }
 
-.copy p + p {
-  margin-top: 12px;
+.copy p {
+  margin: 0;
 }
 
 .error {
@@ -21,8 +27,30 @@
 
 .actions {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
-  margin-top: 24px;
+  gap: 8px;
+  margin-top: 20px;
+}
+
+.dots {
+  display: flex;
+  gap: 6px;
+  margin-right: auto;
+}
+
+.dot,
+.dotActive {
+  width: 6px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--dsw-alias-border-l2);
+  transition: width 200ms ease;
+}
+
+.dotActive {
+  width: 18px;
+  background: var(--dsw-alias-brand-primary);
 }
 
 .primary {
@@ -30,7 +58,18 @@
 }
 
 @media (max-width: 560px) {
+  .actions {
+    flex-wrap: wrap;
+  }
+
+  .dots {
+    flex-basis: 100%;
+    justify-content: center;
+    margin: 0 0 4px;
+  }
+
   .primary {
-    width: 100%;
+    flex: 1;
+    min-width: 0;
   }
 }
