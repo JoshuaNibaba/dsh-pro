@@ -26,6 +26,7 @@ DSH Pro 是非官方版本，不由 DeepSeek 开发、认可或提供支持。DS
 ## 亮点
 
 - **任务看板**:按工作区规划任务，让每个会话按泳道逐个执行。
+- **配色主题**:默认 Everforest,另有八套编辑器配色可在「通用」设置中切换。
 - **远程使用**:DSH Remote 把 dsh 安装为服务，并配好密码网关和 HTTPS;用原生 Mac 客户端、浏览器或手机连接。
 - **服务器状态栏**:输入框下方显示连接状态、服务器 CPU 和内存、RPC 延迟。
 - **手机布局**:侧栏抽屉，以及手机浏览器可添加到主屏幕的启动图标。
@@ -105,18 +106,24 @@ ditto -x -k /tmp/DSH-Remote.zip ~/Applications
 
 ### 任务看板
 
-在「插件」页打开 **看板** 后，每个已开始的会话在「对话」「轨迹」旁多一个 **任务看板** 标签。看板按工作区分为三列：计划池、每个会话一条泳道、已完成。把计划卡片拖进某个会话的泳道，看板服务会在该会话空闲时逐个发送任务，并按该轮的结束原因把任务标记为完成或失败；失败会暂停该泳道，并提供重试、跳过和撤回。未发送的任务可以随时编辑、移动或撤回。
+新建的 Web profile 默认开启**看板**(可在「插件」页关闭),每个已开始的会话在「对话」「轨迹」旁多一个 **任务看板** 标签。看板按工作区分为三列：计划池、每个会话一条泳道、已完成。把计划卡片拖进某个会话的泳道，看板服务会在该会话空闲时逐个发送任务，并按该轮的结束原因把任务标记为完成或失败；失败会暂停该泳道，并提供重试、跳过和撤回。未发送的任务可以随时编辑、移动或撤回。
 
 ![任务看板：计划池、会话泳道(执行中)和已完成](.github/dsh-pro/kanban.png)
 
 ### 服务器状态栏
 
-输入框下方显示连接状态、服务器 CPU、服务器内存和 RPC 往返延迟(见第一张图底部)。远程使用时一眼能看出是服务器忙、网络慢还是连接断了。默认停用；在 Web profile 的 `~/.dsh/profiles/web/cordis.patch.yml` 中加入下面几行后重启 dsh:
+输入框下方显示连接状态、服务器 CPU、服务器内存和 RPC 往返延迟(见第一张图底部)。远程使用时一眼能看出是服务器忙、网络慢还是连接断了。默认开启；要隐藏它，在 Web profile 的 `~/.dsh/profiles/web/cordis.patch.yml` 中加入下面几行后重启 dsh:
 
 ```yaml
 - id: ui-server-status
-  disabled: false
+  disabled: true
 ```
+
+### 配色主题
+
+Web 界面默认使用 Everforest。**设置 → 通用 → 配色主题**可在 Everforest、Gruvbox、Catppuccin、Rosé Pine、Tokyo Night、Nord、Solarized、Kanagawa 和 GitHub 之间切换，选**默认**则回到内置配色。每套配色都有浅色和深色两版，因此「外观」仍决定浅色、深色或跟随系统；包括欢迎弹窗在内的所有界面都跟随配色。选择按浏览器保存。
+
+![设置 → 通用：「配色主题」一行，选中 Everforest](.github/dsh-pro/themes.png)
 
 ### 工作区文件下载
 
@@ -159,16 +166,17 @@ ditto -x -k /tmp/DSH-Remote.zip ~/Applications
 
 ## 新增插件
 
-以下插件都随 DSH Pro 构建，无需安装。
+以下插件都随 DSH Pro 构建，无需安装，新部署时全部开启。
 
-| 插件 | 包 | 默认状态 | 开启方式 |
-|---|---|---|---|
-| 任务看板 | `@deepseek-ai/dsh-experimental-kanban-bundle`(含 `dsh-experimental-kanban` 和 `dsh-experimental-client-ui-kanban`) | 关闭(实验性) | 「插件」页打开「看板」,见下图 |
-| 服务器状态栏 | `@deepseek-ai/dsh-client-ui-server-status` | 关闭 | 在 `cordis.patch.yml` 中设置 `disabled: false`,见上文 |
-| 模型原生搜索 | `@deepseek-ai/dsh-web-search-model` | 开启 | — |
-| 文件下载、手机布局、历史分页等 | 对官方插件的修改 | 开启 | — |
+| 插件 | 包 | 关闭方式 |
+|---|---|---|
+| 任务看板 | `@deepseek-ai/dsh-experimental-kanban-bundle`(含 `dsh-experimental-kanban` 和 `dsh-experimental-client-ui-kanban`) | 在「插件」页关闭「看板」,见下图 |
+| 配色主题 | `@deepseek-ai/dsh-client-ui-theme-pack` | 在「设置 → 通用 → 配色主题」中选择**默认** |
+| 服务器状态栏 | `@deepseek-ai/dsh-client-ui-server-status` | 在 `cordis.patch.yml` 中设置 `disabled: true`,见上文 |
+| 模型原生搜索 | `@deepseek-ai/dsh-web-search-model` | — |
+| 文件下载、手机布局、历史分页等 | 对官方插件的修改 | — |
 
-![「插件」页：在「官方」分组中打开「看板」](.github/dsh-pro/plugins.png)
+![「插件」页：「官方」分组中已开启「看板」](.github/dsh-pro/plugins.png)
 
 <a id="update"></a>
 

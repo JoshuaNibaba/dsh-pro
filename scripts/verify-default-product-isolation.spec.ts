@@ -105,11 +105,32 @@ describe('default product isolation', () => {
       + `export const OPTIONAL_BUNDLES = ['${layer}']\n`)
     expect(verifyDefaultProductIsolation(root)).toMatchObject({ failures: [], packageCount: 6 })
 
-    // The exception covers the dependency edge alone: a runtime import or a default template still names the product.
+    // The exception covers the dependency edge alone: a runtime import or another default list still names the product.
     write(root, 'apps/cli/src/bin.ts', `import '${layer}'\n`)
     expect(verifyDefaultProductIsolation(root).failures.join('\n')).toContain(`apps/cli/src/bin.ts -> ${layer}`)
     write(root, 'apps/cli/src/bin.ts', 'export {}\n')
+    write(root, profile, `export const PROFILE_TEMPLATES = { web: { bundles: ['${base}'] } }\n`
+      + `export const DEFAULT_PROFILE_BUNDLES = ['${base}', '${layer}']\n`
+      + `export const OPTIONAL_BUNDLES = ['${layer}']\n`)
+    expect(verifyDefaultProductIsolation(root).failures.join('\n')).toContain(`optional bundle ${layer} must not be a default bundle`)
+  })
+
+  it('lets the Web template preselect an optional bundle without composing it into the default product', () => {
+    const root = fixture()
+    const layer = '@deepseek-ai/dsh-experimental-layer'
+    write(root, 'packages/experimental/layer/package.json', {
+      name: layer, icon: './icon.svg', exports: { './locale/*.json': './locale/*.json' },
+      dependencies: { [experimental]: 'workspace:^' }, dsh: { bundle: { patch: './cordis.patch.yml' } },
+    })
+    write(root, 'packages/experimental/layer/cordis.patch.yml', [{ insert: [{ name: experimental }] }])
+    manifest(root, 'apps/cli/package.json', { dependencies: { [core]: 'workspace:^', [layer]: 'workspace:^' } })
     write(root, profile, `export const PROFILE_TEMPLATES = { web: { bundles: ['${base}', '${layer}'] } }\n`
+      + `export const DEFAULT_PROFILE_BUNDLES = ['${base}']\n`
+      + `export const OPTIONAL_BUNDLES = ['${layer}']\n`)
+    expect(verifyDefaultProductIsolation(root).failures).toEqual([])
+
+    // A second mention in another template is still a default selection.
+    write(root, profile, `export const PROFILE_TEMPLATES = { web: { bundles: ['${base}', '${layer}'] }, acp: { bundles: ['${base}', '${layer}'] } }\n`
       + `export const DEFAULT_PROFILE_BUNDLES = ['${base}']\n`
       + `export const OPTIONAL_BUNDLES = ['${layer}']\n`)
     expect(verifyDefaultProductIsolation(root).failures.join('\n')).toContain(`optional bundle ${layer} must not be a default bundle`)

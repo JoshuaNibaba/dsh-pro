@@ -39,12 +39,16 @@ async function readClientRoster() {
   }
 }
 
+// DSH Pro's Web template preselects the Kanban optional bundle; its Client half is the one experimental package
+// a fresh profile activates.
+const PRESELECTED_KANBAN = '@deepseek-ai/dsh-experimental-client-ui-kanban'
+
 function experimentalClientReferences(roster: Awaited<ReturnType<typeof readClientRoster>>): string[] {
   return [
     ...roster.entries.map(entry => entry.name),
     ...roster.plugins.flatMap(plugin => [plugin.owner ?? '', ...plugin.modules]),
     ...roster.modules,
-  ].filter(name => name.startsWith('@deepseek-ai/dsh-experimental-'))
+  ].filter(name => name.startsWith('@deepseek-ai/dsh-experimental-') && !name.startsWith(PRESELECTED_KANBAN))
 }
 
 it('activates the actual default Client registry without experimental packages', async (test) => {
@@ -92,6 +96,7 @@ it('activates the actual default Client registry without experimental packages',
       expect(roster.plugins.length).toBeGreaterThan(roster.entries.length)
       expect(roster.plugins.some(plugin => plugin.modules.includes('@deepseek-ai/dsh-client-ui-layout'))).toBe(true)
       expect(experimentalClientReferences(roster)).toEqual([])
+      expect(roster.entries.some(entry => entry.name === PRESELECTED_KANBAN && entry.state === FiberState.ACTIVE)).toBe(true)
       const contaminatedHost = await request('mount-experimental-entry')
       const experimentalName = '@deepseek-ai/dsh-experimental-client-ui-agent-team'
       expect(contaminatedHost.client.entries.map(entry => entry.id)).toContain(experimentalName)

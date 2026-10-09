@@ -1,7 +1,9 @@
 /**
  * Keep experimental packages outside default installations, runtime imports, and shipped compositions.
  * The one declared exception is a bundle the launcher names in `OPTIONAL_BUNDLES`: shipped for the person to
- * switch on, selected by no shipped template, its own dependency graph outside the default product's.
+ * switch on, its own dependency graph outside the default product's. DSH Pro's Web template may preselect such a
+ * bundle; it stays switchable, so it is excluded from the default composition this gate scans. No other template or
+ * default list may name one.
  */
 
 import { existsSync, globSync, readFileSync, statSync } from 'node:fs'
@@ -241,20 +243,24 @@ export function verifyDefaultProductIsolation(root: string): ProductIsolationRes
     if (path.startsWith('apps/') || path === 'python/sdk-runtime') add(pkg, path)
   }
   if (selection !== undefined) {
-    for (const name of selection.packages) {
+    // One occurrence per Web-template preselection leaves the list; any other mention still fails below.
+    const listed = [...selection.packages]
+    for (const name of selection.webBundles.filter(name => optionalBundles.has(name))) listed.splice(listed.indexOf(name), 1)
+    for (const name of listed) {
       reference(name, PROFILE_SOURCE)
       if (packages.get(name)?.manifest.dsh?.bundle?.patch === undefined) {
         failures.push(`${PROFILE_SOURCE}: default bundle ${name} must declare dsh.bundle.patch`)
       }
       if (optionalBundles.has(name)) failures.push(`${PROFILE_SOURCE}: optional bundle ${name} must not be a default bundle`)
     }
-    const webLayers = selection.webBundles.flatMap((name) => {
+    const defaultWebBundles = selection.webBundles.filter(name => !optionalBundles.has(name))
+    const webLayers = defaultWebBundles.flatMap((name) => {
       const pkg = packages.get(name)
       const bundle = pkg?.manifest.dsh?.bundle
       if (pkg === undefined || bundle === undefined) return []
       return [bundlePatchPaths(pkg.directory, bundle).flatMap(file => loadOverlayPatches('verify-default-product-isolation', file))]
     })
-    if (webLayers.length !== selection.webBundles.length) {
+    if (webLayers.length !== defaultWebBundles.length) {
       failures.push(`${PROFILE_SOURCE}: default Web bundle layers are incomplete`)
     } else {
       const entries = composeEntries(webLayers)

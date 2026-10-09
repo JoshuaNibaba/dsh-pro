@@ -236,6 +236,11 @@
     - id: ui-theme
       name: '@deepseek-ai/dsh-client-ui-theme'
 
+    # DSH Pro: editor color schemes over the alias tokens, Everforest until the
+    # browser stores another choice.
+    - id: ui-theme-pack
+      name: '@deepseek-ai/dsh-client-ui-theme-pack'
+
     - id: locale
       name: '@deepseek-ai/dsh-client-locale'
 
@@ -316,7 +321,6 @@
 
     - id: ui-server-status
       name: '@deepseek-ai/dsh-client-ui-server-status'
-      disabled: true
 
     # Official occupants for the generic sidebar and conversation brand slots.
     - id: ui-brand-official

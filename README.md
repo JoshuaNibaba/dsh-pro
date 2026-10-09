@@ -24,6 +24,7 @@ DSH Pro is unofficial: DeepSeek does not develop, endorse, or support it. Report
 ## Highlights
 
 - **Kanban task board**: plan tasks per Workspace and let each Session work through its lane one task at a time.
+- **Color themes**: Everforest by default, with eight more editor schemes in General Settings.
 - **Remote use**: DSH Remote installs dsh as a service with a password gateway and HTTPS; a native Mac client, a browser, or a phone connects to it.
 - **Server status footer**: connection state, server CPU and memory, and RPC latency under the composer.
 - **Phone layout**: a sidebar drawer and home-screen launcher icons for phone browsers.
@@ -95,18 +96,24 @@ On first launch, enter the web address and access password. [remote/README.md](r
 
 ### Kanban task board
 
-After you switch on **Kanban** on the Plugins page, every started Session gets a **Kanban** tab beside Chat and Trajectory. The board of the Session's Workspace has three columns: a plan pool, one lane per Session, and completed tasks. Drag a planned card into a Session's lane and the Kanban service sends the lane's tasks one at a time while that Session is idle, then marks each task completed or failed from the end reason of its Turn; a failure pauses the lane and offers retry, skip, and withdraw. Unsent tasks stay editable, movable, and withdrawable.
+Kanban is switched on in a new Web profile (the Plugins page can switch it off), and every started Session gets a **Kanban** tab beside Chat and Trajectory. The board of the Session's Workspace has three columns: a plan pool, one lane per Session, and completed tasks. Drag a planned card into a Session's lane and the Kanban service sends the lane's tasks one at a time while that Session is idle, then marks each task completed or failed from the end reason of its Turn; a failure pauses the lane and offers retry, skip, and withdraw. Unsent tasks stay editable, movable, and withdrawable.
 
 ![Kanban board: plan pool, a Session lane with a running task, and completed tasks](.github/dsh-pro/kanban.png)
 
 ### Server status footer
 
-The footer under the composer shows the connection state, server CPU, server memory, and RPC round-trip latency (bottom of the first screenshot), so a remote user can tell a busy server from a slow network or a dropped connection. It ships disabled; add these lines to the Web profile's `~/.dsh/profiles/web/cordis.patch.yml` and restart dsh:
+The footer under the composer shows the connection state, server CPU, server memory, and RPC round-trip latency (bottom of the first screenshot), so a remote user can tell a busy server from a slow network or a dropped connection. It is on by default; to hide it, add these lines to the Web profile's `~/.dsh/profiles/web/cordis.patch.yml` and restart dsh:
 
 ```yaml
 - id: ui-server-status
-  disabled: false
+  disabled: true
 ```
+
+### Color themes
+
+The Web UI starts in Everforest. **Settings → General → Color theme** switches among Everforest, Gruvbox, Catppuccin, Rosé Pine, Tokyo Night, Nord, Solarized, Kanagawa, and GitHub, or returns to the built-in palette with **Default**. Each scheme has a light and a dark palette, so the Appearance row still picks light, dark, or system, and every surface follows the scheme, including the welcome dialog. The choice is saved per browser.
+
+![Settings → General: the Color theme row with Everforest selected](.github/dsh-pro/themes.png)
 
 ### Workspace file downloads
 
@@ -147,16 +154,17 @@ The first time a browser opens DSH Pro, a paged welcome dialog walks through the
 
 ## Added plugins
 
-All of these are built with DSH Pro; none needs installation.
+All of these are built with DSH Pro; none needs installation, and all are on in a new deployment.
 
-| Plugin | Package | Default | How to switch on |
-|---|---|---|---|
-| Kanban | `@deepseek-ai/dsh-experimental-kanban-bundle` (with `dsh-experimental-kanban` and `dsh-experimental-client-ui-kanban`) | Off (experimental) | Switch on Kanban on the Plugins page, shown below |
-| Server status footer | `@deepseek-ai/dsh-client-ui-server-status` | Off | Set `disabled: false` in `cordis.patch.yml`, as above |
-| Model-native search | `@deepseek-ai/dsh-web-search-model` | On | — |
-| File downloads, phone layout, paged history, and the rest | Changes to official plugins | On | — |
+| Plugin | Package | How to turn it off |
+|---|---|---|
+| Kanban | `@deepseek-ai/dsh-experimental-kanban-bundle` (with `dsh-experimental-kanban` and `dsh-experimental-client-ui-kanban`) | Switch off Kanban on the Plugins page, shown below |
+| Color themes | `@deepseek-ai/dsh-client-ui-theme-pack` | Choose **Default** under Settings → General → Color theme |
+| Server status footer | `@deepseek-ai/dsh-client-ui-server-status` | Set `disabled: true` in `cordis.patch.yml`, as above |
+| Model-native search | `@deepseek-ai/dsh-web-search-model` | — |
+| File downloads, phone layout, paged history, and the rest | Changes to official plugins | — |
 
-![Plugins page: switch on Kanban in the Official group](.github/dsh-pro/plugins.png)
+![Plugins page: Kanban switched on in the Official group](.github/dsh-pro/plugins.png)
 
 ## Update
 
