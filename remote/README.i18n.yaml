@@ -3,11 +3,11 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write remote/README.md
 /dsh-remote:
-  en: 5ce6c12d7cb6a988
-  zh: 2e3fa73c86dee516
+  en: aeb0b3e7c41941c6
+  zh: bca799eb2e3670f4
 /dsh-remote/1-install-the-server:
-  en: f1bebba89a88c645
-  zh: a62e4277d869a640
+  en: ab77eea8e7986864
+  zh: 3ec161fcb565a27f
 /dsh-remote/2-install-the-mac-client:
   en: 8dbda5750e274ddd
   zh: e811d043d890342f
@@ -15,5 +15,5 @@
   en: 65e8f751239e58d2
   zh: 75a659f29c00fdf7
 /dsh-remote/development:
-  en: 2bb9c07ddd7dd237
-  zh: b770017500371380
+  en: 01bb666c3ca0c184
+  zh: e2cae8d27b1070c7

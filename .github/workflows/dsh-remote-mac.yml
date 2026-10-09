@@ -1,4 +1,4 @@
-# Builds DSH Remote.app (remote/mac) on macOS for every custom push that touches it
+# Builds DSH Remote.app (remote/mac) on macOS for every main push that touches it
 # and publishes it to the rolling GitHub release `dsh-remote`: DSH-Remote.zip plus
 # DSH-Remote.version (the build number), which the app's updater and
 # remote/cli/dsh-remote read. Build numbers continue the standalone repository's
@@ -7,7 +7,7 @@ name: DSH Remote (Mac)
 
 on:
   push:
-    branches: [custom]
+    branches: [main]
     paths: ['remote/mac/**', '.github/workflows/dsh-remote-mac.yml']
   workflow_dispatch:
 
@@ -68,7 +68,7 @@ jobs:
         run: |
           short="$(git rev-parse --short HEAD)"
           title="DSH Remote 1.0.$BUILD_NUMBER (Mac 客户端)"
-          notes="$(printf 'DSH Remote Mac 客户端 1.0.%s,构建自 %s:%s\n\n下载 DSH-Remote.zip,解压后把 DSH Remote.app 拖到「应用程序」。说明见 [remote/README.md](https://github.com/%s/blob/custom/remote/README.md)。' \
+          notes="$(printf 'DSH Remote Mac 客户端 1.0.%s,构建自 %s:%s\n\n下载 DSH-Remote.zip,解压后把 DSH Remote.app 拖到「应用程序」。说明见 [remote/README.md](https://github.com/%s/blob/main/remote/README.zh.md)。' \
             "$BUILD_NUMBER" "$short" "$(git log -1 --format=%s)" "$GITHUB_REPOSITORY")"
           git tag -f "$RELEASE_TAG" "$GITHUB_SHA"
           git push origin "+refs/tags/$RELEASE_TAG"

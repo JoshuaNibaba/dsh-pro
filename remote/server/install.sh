@@ -20,7 +20,7 @@ Without --domain, dsh is reachable only through SSH tunnels (DSH Remote's SSH mo
 EOF
 }
 
-REPO="${DSH_REMOTE_REPO:-JoshuaNibaba/dsh-pro}" REF="${DSH_REMOTE_REF:-custom}"
+REPO="${DSH_REMOTE_REPO:-JoshuaNibaba/dsh-pro}" REF="${DSH_REMOTE_REF:-main}"
 DOMAIN="" TLS="letsencrypt" EMAIL="" PASSWORD="" WORKDIR="/home/dsh/workspace" DSH_VERSION="latest" COPY_KEYS=1
 WEB_PORT=18790 GATEWAY_PORT=18800
 while [ $# -gt 0 ]; do

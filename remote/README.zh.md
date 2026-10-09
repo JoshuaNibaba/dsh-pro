@@ -2,7 +2,7 @@
 
 [English](README.md) | 中文
 
-在自己的服务器上运行 [DeepSeek Harness](https://github.com/deepseek-ai/DeepSeek-Harness) 的 Web 界面(`dsh web`),然后从 Mac 客户端、浏览器或手机远程使用。DSH Remote 是 [DSH Pro](../FORK.md) 的子项目，位于 DSH Pro 仓库的 `remote/` 目录。
+在自己的服务器上运行 [DeepSeek Harness](https://github.com/deepseek-ai/DeepSeek-Harness) 的 Web 界面(`dsh web`),然后从 Mac 客户端、浏览器或手机远程使用。DSH Remote 是 [DeepSeek Harness Pro](../README.zh.md) 的子项目，位于 DSH Pro 仓库的 `remote/` 目录。
 
 - **Mac 客户端**(`mac/`):原生 macOS 应用(WKWebView,几百 KB)。填网页地址和访问密码即可登录，和浏览器一样;也可以用本机 SSH key 建立隧道。支持应用内自动更新。标题栏颜色随 dsh 的主题(浅色/深色/自定义主题)变化。
 - **服务端**(`server/`):一键安装脚本。dsh 只监听服务器的 127.0.0.1;可选地在前面加一个密码登录网关和 HTTPS,让浏览器和手机也能访问,登录后长期保持。
@@ -14,10 +14,10 @@
 
 ```sh
 # SSH access only (the Mac client uses an SSH tunnel)
-curl -fsSL https://raw.githubusercontent.com/JoshuaNibaba/dsh-pro/custom/remote/server/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/JoshuaNibaba/dsh-pro/main/remote/server/install.sh | bash
 
 # Also allow browsers and phones (needs a domain that points to this server)
-curl -fsSL https://raw.githubusercontent.com/JoshuaNibaba/dsh-pro/custom/remote/server/install.sh | bash -s -- --domain dsh.example.com
+curl -fsSL https://raw.githubusercontent.com/JoshuaNibaba/dsh-pro/main/remote/server/install.sh | bash -s -- --domain dsh.example.com
 ```
 
 已经克隆了 DSH Pro 时，也可以直接运行 `bash remote/server/install.sh [选项]`。通过 curl 运行时，脚本只从 GitHub 下载 `remote/server/` 下需要的几个文件；环境变量 `DSH_REMOTE_REPO=<owner>/<repo>` 和 `DSH_REMOTE_REF=<分支>` 可改变下载来源。
@@ -34,7 +34,7 @@ curl -fsSL https://raw.githubusercontent.com/JoshuaNibaba/dsh-pro/custom/remote/
 
 升级服务器上的 dsh:`dsh-update [版本]`(root),或以 `dsh` 用户运行 `sudo dsh-update [版本]`;版本只接受 npm 版本号或标签。
 
-运行 DSH Pro 或其他自建的 dsh:让 `~dsh/.dsh-remote/dsh-bin` 指向自建版本的 `apps/cli/lib/bin.js` 并重启 `dsh-web`,删除该链接即回到 npm 版本。在服务器上构建并切换到 DSH Pro 的完整命令见 [FORK.md](../FORK.md#deploy-to-a-server-and-use-it-remotely)(页首可切换中文)。
+运行 DSH Pro 或其他自建的 dsh:让 `~dsh/.dsh-remote/dsh-bin` 指向自建版本的 `apps/cli/lib/bin.js` 并重启 `dsh-web`,删除该链接即回到 npm 版本。在服务器上构建并切换到 DSH Pro 的完整命令见 [README](../README.zh.md#deploy-to-a-server)。
 
 域名经 Cloudflare 代理时,SSL 模式 Full 和 Flexible 都可以用(nginx 只信任 Cloudflare 官方 IP 段发来的 `X-Forwarded-Proto` 和 `CF-Connecting-IP`)。建议用 Full:Flexible 下 Cloudflare 到服务器这一段是明文 HTTP。
 
@@ -101,7 +101,7 @@ Mac 客户端的 SSH 隧道会自动恢复,不需要安装 `autossh`:每 10 秒�
 ./remote/mac/build.sh --no-install  # only package remote/mac/build/DSH-Remote.zip
 ```
 
-每次推送到 `custom` 且修改了 `remote/mac/` 时,GitHub Actions([`.github/workflows/dsh-remote-mac.yml`](../.github/workflows/dsh-remote-mac.yml))在 macOS 上编译，并更新固定的 release `dsh-remote`:替换其中的 `DSH-Remote.zip` 和记录构建号的 `DSH-Remote.version`,标签移到本次提交。每次构建都替换这一个 release 中的文件，与 DSH Pro 自身的 `custom-v*` 发布互不影响。客户端的自动更新读取 `DSH-Remote.version`,构建号大于本机版本时提示更新。Fork 仓库后，构建出的客户端会从你自己的仓库检查更新。
+每次推送到 `main` 且修改了 `remote/mac/` 时,GitHub Actions([`.github/workflows/dsh-remote-mac.yml`](../.github/workflows/dsh-remote-mac.yml))在 macOS 上编译，并更新固定的 release `dsh-remote`:替换其中的 `DSH-Remote.zip` 和记录构建号的 `DSH-Remote.version`,标签移到本次提交。每次构建都替换这一个 release 中的文件，与 DSH Pro 自身的 `dsh-pro-v*` 发布互不影响。客户端的自动更新读取 `DSH-Remote.version`,构建号大于本机版本时提示更新。Fork 仓库后，构建出的客户端会从你自己的仓库检查更新。
 
 macOS CI 除了重试与进程生命周期测试,还启动仅监听回环地址的临时 `sshd`,使用临时密钥验证首次连接和重连各只认证一次,并覆盖命令总超时、执行中取消、双输出流大于管道容量及带 shell 提示的登录地址解析。
 

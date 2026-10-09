@@ -2,33 +2,63 @@
 # section, a hash of its English and Chinese blocks outside code blocks and generated regions.
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write README.md
-/deepseek-harness:
-  en: 969590977421f683
-  zh: 4139455fd96a291a
-/deepseek-harness/developer-preview:
-  en: 4ef4d8a71ac143f0
-  zh: 1bfc3149ba8e5543
-/deepseek-harness/run:
-  en: 4e0248e4c6474fc6
-  zh: eb2fb8d78c7d6bc0
-/deepseek-harness/run/run-from-npm:
-  en: e22005cd42e6cbad
-  zh: 0f536f4208df1d60
-/deepseek-harness/run/run-from-source:
-  en: 819e3f7c144d0d64
-  zh: de815f040975dba7
-/deepseek-harness/community-and-support:
-  en: 20acf6451fdc869b
-  zh: d06246dd019ecef7
-/deepseek-harness/contributing:
-  en: cabc2d3e9f8898bd
-  zh: 83b6d238bae29ce3
-/deepseek-harness/development:
-  en: 803ca2b11b497bed
-  zh: 8b4071eb0e7783ef
-/deepseek-harness/citation:
-  en: 6704e9e5a8d49a91
-  zh: 85c9cdd8d56f8e9d
-/deepseek-harness/license:
-  en: 926995344fc1c72b
-  zh: c92fab5abf85932f
+/deepseek-harness-pro:
+  en: 038390cbf421a126
+  zh: 07cf790db2979210
+/deepseek-harness-pro/contents:
+  en: a9ac5eec9007fe78
+  zh: d6a2feb4769c2b44
+/deepseek-harness-pro/highlights:
+  en: ddcded6940aaa3be
+  zh: 4cbce59ac5bfdbef
+/deepseek-harness-pro/run:
+  en: 5e5f19610e227df4
+  zh: f03e6a013381b424
+/deepseek-harness-pro/run/run-from-source:
+  en: 9d3450c137f894b3
+  zh: c3cd7351aab573b9
+/deepseek-harness-pro/deploy-to-a-server:
+  en: 7ff0bb22418625e3
+  zh: abe09d996221de8e
+/deepseek-harness-pro/improvements-over-deepseek-harness:
+  en: 7aee9d6f83fa3fc0
+  zh: 966e2673f247950c
+/deepseek-harness-pro/improvements-over-deepseek-harness/kanban-task-board:
+  en: da57e3a3dac364eb
+  zh: ac0028c0e98c6a67
+/deepseek-harness-pro/improvements-over-deepseek-harness/server-status-footer:
+  en: b2f4656f45dc233c
+  zh: bc9951a6d618f14e
+/deepseek-harness-pro/improvements-over-deepseek-harness/workspace-file-downloads:
+  en: cfa07ea228d3fa0b
+  zh: 6f0d4e7601dee836
+/deepseek-harness-pro/improvements-over-deepseek-harness/phone-layout:
+  en: 88312c94170d8977
+  zh: 70e26ae4c88c28be
+/deepseek-harness-pro/improvements-over-deepseek-harness/model-native-web-search:
+  en: f14678e7ce9135b9
+  zh: 4a558430a624e5bc
+/deepseek-harness-pro/improvements-over-deepseek-harness/remote-connection-and-load-time:
+  en: ce8ababb695899f9
+  zh: 5a0418046535025f
+/deepseek-harness-pro/improvements-over-deepseek-harness/models-and-tools:
+  en: 70ad2eecb59719bb
+  zh: a4ed8d176674d665
+/deepseek-harness-pro/added-plugins:
+  en: 5c033594a2f17763
+  zh: 2adabb5c18092ea7
+/deepseek-harness-pro/update:
+  en: 16d8fb9c24ad95e8
+  zh: ec4af1fc11d360e8
+/deepseek-harness-pro/releases-and-branches:
+  en: fa93574d0847b3c0
+  zh: 6d788b7a4be11c7d
+/deepseek-harness-pro/compatibility:
+  en: bdec3ba17b3a6ea1
+  zh: c7cf681a539bb075
+/deepseek-harness-pro/about-deepseek-harness:
+  en: 6b6b3904840885e2
+  zh: 25e2e26acce995f2
+/deepseek-harness-pro/license:
+  en: bd639a0005f22fac
+  zh: d49d9ccd82309171

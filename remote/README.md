@@ -2,7 +2,7 @@
 
 English | [中文](README.zh.md)
 
-Run the [DeepSeek Harness](https://github.com/deepseek-ai/DeepSeek-Harness) Web UI (`dsh web`) on your own server and use it remotely from a Mac client, a browser, or a phone. DSH Remote is a subproject of [DSH Pro](../FORK.md) and lives in the `remote/` directory of the DSH Pro repository.
+Run the [DeepSeek Harness](https://github.com/deepseek-ai/DeepSeek-Harness) Web UI (`dsh web`) on your own server and use it remotely from a Mac client, a browser, or a phone. DSH Remote is a subproject of [DeepSeek Harness Pro](../README.md) and lives in the `remote/` directory of the DSH Pro repository.
 
 - **Mac client** (`mac/`): a native macOS app (WKWebView, a few hundred KB). Enter the web address and access password to log in, as in a browser, or open a tunnel with this Mac's SSH key. It updates itself, and its title bar follows the dsh theme (light, dark, or a custom theme).
 - **Server** (`server/`): a one-step installer. dsh listens only on the server's 127.0.0.1; optionally a password login gateway and HTTPS in front of it let browsers and phones connect, and a login lasts a long time.
@@ -14,10 +14,10 @@ Run as root on a Debian/Ubuntu server:
 
 ```sh
 # SSH access only (the Mac client uses an SSH tunnel)
-curl -fsSL https://raw.githubusercontent.com/JoshuaNibaba/dsh-pro/custom/remote/server/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/JoshuaNibaba/dsh-pro/main/remote/server/install.sh | bash
 
 # Also allow browsers and phones (needs a domain that points to this server)
-curl -fsSL https://raw.githubusercontent.com/JoshuaNibaba/dsh-pro/custom/remote/server/install.sh | bash -s -- --domain dsh.example.com
+curl -fsSL https://raw.githubusercontent.com/JoshuaNibaba/dsh-pro/main/remote/server/install.sh | bash -s -- --domain dsh.example.com
 ```
 
 In a DSH Pro clone you can run `bash remote/server/install.sh [options]` directly. When run through curl, the script downloads only the files it needs from `remote/server/` on GitHub; the `DSH_REMOTE_REPO=<owner>/<repo>` and `DSH_REMOTE_REF=<branch>` environment variables change the source.
@@ -34,7 +34,7 @@ The script copies root's `authorized_keys` to the `dsh` user (`--no-copy-root-ke
 
 To upgrade dsh on the server, run `dsh-update [VERSION]` as root, or `sudo dsh-update [VERSION]` as the `dsh` user; it accepts only an npm version or dist-tag.
 
-To run DSH Pro or another self-built dsh, point `~dsh/.dsh-remote/dsh-bin` at its `apps/cli/lib/bin.js` and restart `dsh-web`; deleting the link returns to the npm release. [FORK.md](../FORK.md#deploy-to-a-server-and-use-it-remotely) lists the full commands for building DSH Pro on the server and switching to it.
+To run DSH Pro or another self-built dsh, point `~dsh/.dsh-remote/dsh-bin` at its `apps/cli/lib/bin.js` and restart `dsh-web`; deleting the link returns to the npm release. [README](../README.md#deploy-to-a-server) lists the full commands for building DSH Pro on the server and switching to it.
 
 For a domain proxied by Cloudflare, SSL modes Full and Flexible both work (nginx trusts `X-Forwarded-Proto` and `CF-Connecting-IP` only from Cloudflare's published IP ranges). Prefer Full: with Flexible, the hop from Cloudflare to the server is plain HTTP.
 
@@ -101,7 +101,7 @@ Run these commands from the root of the DSH Pro repository:
 ./remote/mac/build.sh --no-install  # only package remote/mac/build/DSH-Remote.zip
 ```
 
-On every push to `custom` that changes `remote/mac/`, GitHub Actions ([`.github/workflows/dsh-remote-mac.yml`](../.github/workflows/dsh-remote-mac.yml)) builds on macOS and updates the fixed release `dsh-remote`: it replaces `DSH-Remote.zip` and `DSH-Remote.version`, which records the build number, and moves the tag to the built commit. Each build replaces the assets in that one release, so DSH Pro's own `custom-v*` releases stay separate. The client's updater reads `DSH-Remote.version` and offers an update when the build number exceeds its own. In a fork, the built client checks for updates in your own repository.
+On every push to `main` that changes `remote/mac/`, GitHub Actions ([`.github/workflows/dsh-remote-mac.yml`](../.github/workflows/dsh-remote-mac.yml)) builds on macOS and updates the fixed release `dsh-remote`: it replaces `DSH-Remote.zip` and `DSH-Remote.version`, which records the build number, and moves the tag to the built commit. Each build replaces the assets in that one release, so DSH Pro's own `dsh-pro-v*` releases stay separate. The client's updater reads `DSH-Remote.version` and offers an update when the build number exceeds its own. In a fork, the built client checks for updates in your own repository.
 
 Besides retry and process-lifecycle tests, macOS CI starts a temporary loopback-only `sshd` with temporary keys to verify that the first connection and a reconnection each authenticate once, and covers the overall command timeout, cancellation while running, both output streams exceeding the pipe capacity, and parsing the login address next to a shell prompt.
 
