@@ -2,6 +2,7 @@
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { Context, FiberState } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import Include from '@deepseek-ai/cordis-plugin-include'
@@ -67,7 +68,7 @@ describe('Connection HTTP RPC ownership in a Loader composition', () => {
     fixtureDir = await mkdtemp(join(tmpdir(), 'dsh-connection-rpc-owner-'))
     const configPath = join(fixtureDir, 'cordis.yml')
     await writeFile(configPath, await readFile(new URL('./fixtures/rpc-owner.yml', import.meta.url), 'utf8'))
-    await ctx.loader.create({ name: 'cordis:include', config: { path: configPath } })
+    await ctx.loader.create({ name: 'cordis:include', config: { path: pathToFileURL(configPath).href } })
     await ctx.loader.await()
     expect(errors).toEqual([])
     const entries = [...ctx.loader.entries()]
