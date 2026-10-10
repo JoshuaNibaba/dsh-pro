@@ -22,7 +22,7 @@ A Turn shows an answer and lets the reader inspect the work behind it. Start wit
 <a id="reading-model"></a>
 ## How one Turn becomes a transcript
 
-Grouping, counts, display modes, and whole-Turn folding answer different questions. Grouping decides which process rows belong together. Counts summarize work inside an existing group. Display modes decide how much of each group to show. Without an intervening input, whole-Turn folding can hide the entire process across several groups and intermediate replies.
+Grouping, counts, display modes, and whole-Turn folding answer different questions. Grouping decides which process rows belong together. Counts summarize work inside an existing group. Display modes decide how much of each group to show. Without an intervening input, whole-Turn folding can hide process details across several groups; every Assistant reply remains visible.
 
 ### A complete example
 
@@ -30,14 +30,14 @@ Suppose the assistant thinks, reads a file, runs a command, posts a progress rep
 
 - User input.
 - Whole-Turn control.
-- Process content controlled by the whole-Turn control:
-  - Group G1: reasoning, `read`, `bash`.
-  - Intermediate reply: outside both groups, but still part of the Turn's process.
-  - Group G2: reasoning, `run_code`.
+- Group G1, controlled by the whole-Turn control:
+  - Reasoning, `read`, `bash`.
+- Intermediate reply, outside the process fold.
+- Group G2: reasoning, `run_code`, controlled by the whole-Turn control.
 - Final response, outside the process fold.
 - Completed-turn footer.
 
-Every reply separates secondary groups; only the final answer is protected from whole-Turn folding. An intermediate reply can be an independent row and still disappear when the Turn is folded. Reasoning attached to the final answer remains process content.
+Every reply separates secondary groups and remains visible when the Turn is folded, including the opening explanation and progress updates. Reasoning attached to any reply remains process content.
 
 | Question | Deciding rule | Result in this example |
 |---|---|---|
@@ -45,7 +45,7 @@ Every reply separates secondary groups; only the final answer is protected from 
 | What did a group do? | Category counts | G1 has `read=1, commands=1`; G2 has `code=1`. Reasoning adds no tool count. |
 | What does its title say? | Group state and summary | Running groups use their latest running activity; closed groups use their highest-count categories. Counts never decide folding. |
 | How much detail is visible? | Display mode and manual group opening | Compact, Standard, and Detailed retain historical group headers; Detailed shows running bodies directly, while Verbose shows both running and historical bodies directly. |
-| Is the process visible at all? | Whole-Turn opening | Closing the Turn hides G1, the intermediate reply, and G2 together. |
+| Is the process visible at all? | Whole-Turn opening | Closing the Turn hides G1 and G2; the intermediate reply remains visible. |
 
 ### What the reader sees
 
@@ -53,7 +53,7 @@ Assume the Turn above completed normally, with no inner disclosure manually open
 
 | Viewing state | Visible content |
 |---|---|
-| Whole Turn collapsed, Compact/Standard/Detailed | Input, whole-Turn control, final response, and footer. No process headers, bodies, or intermediate reply. |
+| Whole Turn collapsed, Compact/Standard/Detailed | Input, whole-Turn control, intermediate reply, final response, and footer. No process headers or bodies. |
 | Whole Turn open, Compact/Standard/Detailed | G1/G2 headers, the intermediate reply, and final response. Group bodies start collapsed. |
 | Whole Turn and G1 open, Standard or Detailed | G1's reasoning and tool rows with the settled reasoning preview; G2 remains a header. Full reasoning/tool bodies are still manual. |
 | Verbose | Whole-Turn duration/status header without a collapse action, all process rows, intermediate reply, and final response. No group headers; individual tool/reasoning bodies remain manual. |
@@ -91,7 +91,7 @@ Trigger titles and icons use the recorded `source.kind`: `schedule`, `tool-jobs`
 | Neither start nor end is loaded | Keep process rows visible and withhold the whole-Turn control. |
 | A Turn control exists, but there is no process content | Retain its title, without a collapse action. |
 
-The final answer is the latest Step's settled Assistant reply, provided it has visible reply content and no tool-call block. Its response remains outside whole-Turn folding; its reasoning remains process content. User and steering inputs, trigger notices, terminal errors, max-token notices, and the completed-turn footer remain independent. Secondary grouping treats model retries as separators, but whole-Turn folding still includes retry rows.
+The final answer is the latest Step's settled Assistant reply, provided it has visible reply content and no tool-call block. All Assistant responses remain outside whole-Turn folding, even without a final answer or when accompanied by tool calls; their reasoning remains process content. User and steering inputs, trigger notices, terminal errors, max-token notices, and the completed-turn footer remain independent. Secondary grouping treats model retries as separators, but whole-Turn folding still includes retry rows.
 
 Loading an older page preserves the reader's group-opening choices. Newly loaded process content follows the same Turn state while the final answer is unchanged and whole-Turn folding remains eligible. If the page reveals an intervening input, individual group disclosures replace whole-Turn hiding. When the real start arrives, the duration becomes available; loading all history is not an additional folding condition. When new content only extends an existing group at its beginning, that group and its old message rows retain their identities and opening choices. Replies, steering, and other real boundaries in the new page still separate groups; not every new row joins the old group.
 

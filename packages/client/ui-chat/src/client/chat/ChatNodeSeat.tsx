@@ -6,6 +6,7 @@ import type { ChatNodeHookContext, ChatNodeOwnerProps, ChatViewSlotProps, UsePre
 import type { ChatNode } from '../contract/chat-nodes.ts'
 import type { ChatNodeStore } from '../contract/snapshot.ts'
 import { TURN_PROCESS_INDEPENDENT_KINDS, turnProcessAlwaysOpen } from '../contract/turn-process.ts'
+import { hasAssistantReplyContent } from '../contract/assistant-content.ts'
 import { storedTurnProcessEntry } from '../stores.ts'
 import { useSearchableHidden } from './searchable-hidden.ts'
 import css from './ChatView.module.css'
@@ -75,7 +76,11 @@ export const ChatNodeSeat = memo(function ChatNodeSeat({
     && foldCompleted
     && processPresentation.turn === processSpec.turn
     && (processPresentation.turnStarted || processPresentation.turnClosed)
+  const response = routedNode?.kind === 'assistant-step'
+    && groupPart !== 'reasoning'
+    && hasAssistantReplyContent(routedNode.data.blocks)
   const processMember = routedNode !== undefined
+    && !response
     && processWindowReady
     && !TURN_PROCESS_INDEPENDENT_KINDS.has(routedNode.kind)
     && routedNode.anchorSeq >= processSpec.processStartSeq
@@ -87,7 +92,7 @@ export const ChatNodeSeat = memo(function ChatNodeSeat({
     && groupPart !== 'reasoning'
     && routedNode.kind === 'assistant-step'
     && routedNode.data.step === processSpec.answerStep
-  const ownsDisclosure = routedNode?.kind === 'turn-process' || processAnswer
+  const ownsDisclosure = routedNode?.kind === 'turn-process' || response
   const foldable = processWindowReady
     && (liveProcess || processMember || ownsDisclosure)
   const turnProcess = useMemo(() => processSpec === undefined

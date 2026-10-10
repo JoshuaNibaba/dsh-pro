@@ -2196,6 +2196,78 @@ describe('ChatView', () => {
     expect(branchButtons.map(button => button.getAttribute('aria-disabled'))).toEqual([null, null])
   })
 
+  it.each(['compact', 'standard', 'detailed', 'verbose'] as const)(
+    'keeps the preamble and progress replies visible after completion in %s mode', (mode) => {
+      const nodes = [
+        userInTurn(1, 'question', 1),
+        assistant(2, 'opening explanation', 1, 1),
+        toolResult(3, 'a'),
+        {
+          ...assistant(4, 'progress update', 1, 2),
+          blocks: [
+            { kind: 'reasoning' as const, text: 'inspect the repository' },
+            { kind: 'text' as const, text: 'progress update' },
+          ],
+        },
+        toolResult(5, 'b'),
+        assistant(6, 'final answer', 1, 3),
+      ]
+      const builder = new ChatSnapshotBuilder()
+      const groups = new ConversationGroupStore<ProcessGroupData>()
+      const state = new ProcessState()
+      const project = (closed: boolean) => installGroupedSnapshot(builder, state, groups, chatSnapshotFixture({
+        nodes,
+        turnTimings: new Map([[1, { startTime: 0 }]]),
+        turnEnds: new Map(closed ? [[1, 7]] : []),
+      }))
+      const h = makeHarness({ chat: project(false) }, { running: true })
+      h.setGrouped(groups)
+      h.setTranscriptView(mode)
+      const view = render(<h.ChatView {...h.props} />)
+      const replies = ['opening explanation', 'progress update', 'final answer']
+        .map(text => view.getByText(text))
+      const expectRepliesVisible = () => {
+        for (const reply of replies) expect(reply.closest('[hidden]')).toBeNull()
+      }
+      expectRepliesVisible()
+      act(() => { h.set({ chat: project(true), running: false }) })
+      expectRepliesVisible()
+      const toggle = turnProcessControl(view.container)!
+      const roots = [...view.container.querySelectorAll<HTMLElement>('[data-chat-group-key]')]
+      expect(roots.length).toBeGreaterThan(0)
+      expect(roots.every(root => root.closest('[hidden]') !== null)).toBe(mode !== 'verbose')
+      if (mode !== 'verbose') {
+        fireEvent.click(toggle)
+        expect(roots.every(root => root.closest('[hidden]') === null)).toBe(true)
+        expectRepliesVisible()
+        fireEvent.click(toggle)
+        expectRepliesVisible()
+      }
+      for (const next of ['verbose', 'compact', 'standard', 'detailed'] as const) {
+        act(() => { h.setTranscriptView(next) })
+        expectRepliesVisible()
+      }
+      view.unmount()
+      const reloaded = render(<h.ChatView {...h.props} />)
+      for (const text of ['opening explanation', 'progress update', 'final answer']) {
+        expect(reloaded.getByText(text).closest('[hidden]')).toBeNull()
+      }
+      expect(turnProcessControl(reloaded.container)?.getAttribute('aria-expanded')).toBe('false')
+    },
+  )
+
+  it('keeps text-only intermediate replies visible without an empty process disclosure', () => {
+    const h = makeHarness({
+      nodes: [user(1, 'question'), assistant(2, 'preamble'), assistant(3, 'answer', 1, 2)],
+      turnEnds: new Map([[1, 4]]),
+    })
+    const view = render(<h.ChatView {...h.props} />)
+    expect(view.getByText('preamble').closest('[hidden]')).toBeNull()
+    expect(view.getByText('answer').closest('[hidden]')).toBeNull()
+    expect(turnProcessControl(view.container)?.disabled).toBe(true)
+    expect(turnProcessControl(view.container)?.hasAttribute('aria-expanded')).toBe(false)
+  })
+
   it('folds Think and Tool rows before the final answer without unmounting them', () => {
     const first = {
       ...assistant(2, 'earlier reply', 1, 1),
@@ -2222,7 +2294,8 @@ describe('ChatView', () => {
     expect(toggle.getAttribute('data-turn-process-tool-calls')).toBe('1')
     expect(toggle.getAttribute('data-turn-process-messages')).toBe('1')
     expect(toggle.getAttribute('data-turn-process-subagents')).toBe('1')
-    const members = [...view.container.querySelectorAll<HTMLElement>('[data-turn-process-member]')]
+    const members = [...view.container.querySelectorAll<HTMLElement>('[data-turn-process-member], [data-turn-process-inline]')]
+    expect(view.getByText('earlier reply').closest('[hidden]')).toBeNull()
     expect(members).toHaveLength(3)
     expect(members.map(member => member.getAttribute('hidden')))
       .toEqual(['until-found', 'until-found', 'until-found'])
@@ -2244,7 +2317,8 @@ describe('ChatView', () => {
 
     act(() => { h.set({ nodes: [user(1, 'question'), first] }) })
     expect(view.getByRole('button', { name: '已完成，用时 4秒' }).getAttribute('aria-expanded')).toBe('false')
-    expect(members[0]?.getAttribute('hidden')).toBeNull()
+    expect(members[0]?.getAttribute('hidden')).toBe('until-found')
+    expect(view.getByText('earlier reply').closest('[hidden]')).toBeNull()
     act(() => { h.set({
       nodes: [user(1, 'question'), first, toolResult(3, 'a'), toolResult(4, 'b', 'subagent'), second],
     }) })
@@ -2464,7 +2538,7 @@ describe('ChatView', () => {
   })
 
   it('keeps a live Turn expanded and folds it once at turn/end', withClock(3_000, () => {
-    const process = assistant(2, 'inspect', 1, 1)
+    const process = reasoningAssistant(2, 'inspect', 1, 1)
     const h = makeHarness({
       nodes: [user(1, 'question'), process],
       partial: { turn: 1, step: 2, blocks: [{ kind: 'text', text: 'streaming answer' }] },
@@ -2499,7 +2573,7 @@ describe('ChatView', () => {
   }))
 
   it('preserves whole-Turn folding and manual expansion across work-details modes', () => {
-    const process = assistant(2, 'inspect', 1, 1)
+    const process = reasoningAssistant(2, 'inspect', 1, 1)
     const h = makeHarness({
       nodes: [user(1, 'question'), process, assistant(4, 'final answer', 1, 2)],
       turnEnds: new Map([[1, 5]]),
@@ -2577,7 +2651,7 @@ describe('ChatView', () => {
   })
 
   it('folds a completed Turn even while the reader is away from the tail', () => {
-    const first = assistant(2, 'first answer', 1, 1)
+    const first = reasoningAssistant(2, 'first answer', 1, 1)
     const h = makeHarness({
       nodes: [user(1, 'question'), first], running: true,
       turnTimings: new Map([[1, { startTime: 0 }]]),
@@ -2668,7 +2742,7 @@ describe('ChatView', () => {
     const h = makeHarness({
       nodes: [
         user(1, 'question'),
-        assistant(3, 'working', 1, 1),
+        reasoningAssistant(3, 'working', 1, 1),
         assistant(4, 'final answer', 1, 2),
       ],
       turnEnds: new Map([[1, 5]]),
@@ -2821,7 +2895,7 @@ describe('ChatView', () => {
       h.set({
         nodes: [
           user(1, 'older question'),
-          assistant(2, 'older first answer', 1, 1),
+          reasoningAssistant(2, 'older first answer', 1, 1),
           assistant(4, 'older final answer', 1, 2),
           user(9, 'visible question'),
           assistant(10, 'visible answer', 2),
@@ -2847,7 +2921,7 @@ describe('ChatView', () => {
       nodes: [
         user(1, 'question'),
         context(2, 'runtime policy', 1),
-        assistant(3, 'working', 1, 1),
+        reasoningAssistant(3, 'working', 1, 1),
         assistant(4, 'final answer', 1, 2),
       ],
       turnEnds: new Map([[1, 5]]),
@@ -2913,7 +2987,7 @@ describe('ChatView', () => {
     Object.defineProperty(host, 'scrollTop', { value: 0, writable: true, configurable: true })
     document.body.appendChild(host)
     try {
-      const first = assistant(2, 'first answer', 1, 1)
+      const first = reasoningAssistant(2, 'first answer', 1, 1)
       const h = makeHarness({
         nodes: [user(1, 'question'), first, assistant(4, 'new answer', 1, 2)],
         turnEnds: new Map([[1, 5]]),
