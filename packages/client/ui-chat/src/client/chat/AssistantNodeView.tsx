@@ -25,8 +25,6 @@ export const AssistantNodeView = memo(function AssistantNodeView({
   )
   const reasoningHidden = turnProcess !== undefined
     && turnProcess.foldable
-    && turnProcess.spec.answerStep === data.step
-    && turnProcess.spec.inlineReasoning
     && !turnProcess.open
   const revealProcess = useCallback(() => { turnProcess?.setOpen(true) }, [turnProcess])
   return (

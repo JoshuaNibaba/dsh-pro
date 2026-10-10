@@ -61,7 +61,9 @@ function derivePresentation(
     if (TURN_PROCESS_INDEPENDENT_KINDS.has(node.kind)
       || node.anchorSeq < spec.processStartSeq
       || (spec.answerAnchorSeq !== null && node.anchorSeq >= spec.answerAnchorSeq)) continue
-    if (node.kind !== 'assistant-step' || spec.answerStep === null || node.data.step !== spec.answerStep) {
+    if (node.kind !== 'assistant-step'
+      || ((spec.answerStep === null || node.data.step !== spec.answerStep)
+        && node.data.blocks.some(block => block.kind === 'reasoning' && block.text.trim() !== ''))) {
       hasExternalProcess = true
     }
   }
