@@ -1,0 +1,125 @@
+name: DSH Pro CI
+
+on:
+  push:
+    branches: [main]
+    tags: ['dsh-pro-v*']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dsh-pro-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DSH_GATE_CONCURRENCY: '2'
+
+jobs:
+  static:
+    name: Pro static and docs
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run typecheck
+      - run: pnpm run lint:contracts-ready
+      - run: pnpm exec tsx scripts/check-workspace-constraints.ts
+      - run: pnpm run doc-sync
+      - run: pnpm run verify-runtime-closure
+      - run: pnpm run verify-cordis-config
+      - run: pnpm run verify-default-product-isolation
+
+  unit:
+    name: Pro unit (${{ matrix.os }}, Node ${{ matrix.node }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            node: '22.19.0'
+          - os: ubuntu-24.04
+            node: '24'
+          - os: windows-latest
+            node: '24'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ matrix.node }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run build:native-system
+      - run: pnpm run build:lib:host
+      - name: Pro regression tests
+        run: >-
+          pnpm exec vitest run
+          scripts/check-workspace-constraints.spec.ts
+          packages/llm/llm-pi-ai/tests
+          packages/client/connection/tests
+          packages/experimental/kanban/tests
+          packages/experimental/kanban-bundle/tests
+          packages/experimental/client-ui-kanban/tests
+          packages/host/frontend-static/tests
+          --maxWorkers=2
+      - name: Debian installer and updater regressions
+        if: runner.os == 'Linux'
+        run: node --test remote/server/tests/*.test.mjs
+      - name: Mac client JavaScript regressions
+        run: node --test remote/mac/tests/chrome.test.mjs
+
+  web:
+    name: Pro browser smoke
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      DSH_SNAPSHOT: replay
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm run build
+      - name: Built remote access and settings
+        run: >-
+          pnpm exec vitest run --config vitest.web.config.ts
+          apps/web/tests/remote-welcome.e2e.ts
+          apps/web/tests/connection-recovery.e2e.ts
+          apps/web/tests/models-settings-recovery.e2e.ts
+          apps/web/tests/default-workspace.e2e.ts
+
+  required:
+    name: Pro checks passed
+    if: always()
+    needs: [static, unit, web]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require every Pro job to pass
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          node -e 'const jobs = JSON.parse(process.env.RESULTS); if (Object.values(jobs).some(job => job.result !== "success")) process.exit(1)'

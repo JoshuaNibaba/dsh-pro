@@ -57,10 +57,10 @@ step "System packages"
 apt-get update -q >/dev/null 2>&1
 apt-get install -y -q curl ca-certificates git rsync xz-utils build-essential python3 sudo >/dev/null 2>&1
 
-step "Node.js 22"
+step "Node.js (^22.19 || >=24)"
 need_node=1
 if command -v node >/dev/null; then
-  node -e 'const [a,b]=process.versions.node.split(".").map(Number);process.exit(a>22||(a===22&&b>=19)?0:1)' && need_node=0
+  node -e 'const [a,b]=process.versions.node.split(".").map(Number);process.exit(a>=24||(a===22&&b>=19)?0:1)' && need_node=0
 fi
 if [ "$need_node" = 1 ]; then
   arch="$(uname -m)"; case "$arch" in x86_64) arch=x64 ;; aarch64) arch=arm64 ;; esac
@@ -71,7 +71,12 @@ if [ "$need_node" = 1 ]; then
   # owner and let whoever later gets uid 1000 replace node, npm and dsh.
   tar -xJf "/tmp/$file" -C /usr/local --strip-components=1 --no-same-owner --exclude=CHANGELOG.md --exclude=LICENSE --exclude=README.md
   rm -f "/tmp/$file"
+  export PATH=/usr/local/bin:$PATH
+  hash -r
 fi
+NODE_BIN="$(node -p 'process.execPath')"
+[ -x "$NODE_BIN" ] && [[ "$NODE_BIN" = /* ]] || { echo "Node executable must be an absolute executable path: $NODE_BIN" >&2; exit 1; }
+export PATH="$(dirname "$NODE_BIN"):$PATH"
 # Installs before --no-same-owner left Node's files owned by the tarball's uid 1000.
 # Give them back to root, but only when that uid is not a real account.
 node_uid="$(stat -c %u "$(command -v node)")"
@@ -121,7 +126,7 @@ User=dsh
 Group=dsh
 WorkingDirectory=$WORKDIR
 Environment=HOME=/home/dsh
-Environment=PATH=/usr/local/bin:/usr/bin:/bin
+Environment="PATH=$(dirname "$NODE_BIN"):/usr/local/bin:/usr/bin:/bin"
 Environment=DSH_WEB_PORT=$WEB_PORT
 Environment=DSH_PUBLIC_URL=$PUBLIC_URL
 Environment=DSH_TRUSTED_HOST=$DOMAIN
@@ -161,7 +166,7 @@ After=network-online.target dsh-web.service
 [Service]
 User=dsh
 Group=dsh
-ExecStart=/usr/local/bin/node /opt/dsh-remote/gateway.mjs serve --config $CONFIG
+ExecStart="$NODE_BIN" /opt/dsh-remote/gateway.mjs serve --config $CONFIG
 Restart=on-failure
 RestartSec=3
 
@@ -207,10 +212,22 @@ fi
 step "Starting services"
 systemctl daemon-reload
 systemctl enable dsh-web >/dev/null 2>&1
+rm -f /home/dsh/.dsh-remote/url
 systemctl restart dsh-web
 if [ -n "$DOMAIN" ]; then systemctl enable dsh-gateway >/dev/null 2>&1; systemctl restart dsh-gateway; fi
 for _ in $(seq 60); do [ -s /home/dsh/.dsh-remote/url ] && break; sleep 1; done
-[ -s /home/dsh/.dsh-remote/url ] || { echo "dsh-web did not start; see: journalctl -u dsh-web" >&2; exit 1; }
+[ -s /home/dsh/.dsh-remote/url ] && systemctl is-active --quiet dsh-web || { echo "dsh-web did not start; see: journalctl -u dsh-web" >&2; exit 1; }
+if [ -n "$DOMAIN" ]; then
+  gateway_ready=0
+  for _ in $(seq 30); do
+    if systemctl is-active --quiet dsh-gateway && curl -fsS --noproxy 127.0.0.1 --connect-timeout 1 --max-time 2 "http://127.0.0.1:$GATEWAY_PORT/__dsh/health" >/dev/null; then
+      gateway_ready=1
+      break
+    fi
+    sleep 1
+  done
+  [ "$gateway_ready" = 1 ] || { echo "dsh-gateway did not become healthy; see: journalctl -u dsh-gateway" >&2; exit 1; }
+fi
 
 SSH_PORT="$( (sshd -T 2>/dev/null || true) | awk '/^port /{print $2; exit}')"
 cat <<EOF

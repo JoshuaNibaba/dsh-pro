@@ -55,7 +55,9 @@ const publishedRepositoryUrl = 'git+https://github.com/deepseek-ai/deepseek-harn
 const experimentalPackageDirectory = /^packages\/experimental\/[^/]+$/
 /** npm namespace reserved for experimental packages. */
 const experimentalPackageNamePrefix = '@deepseek-ai/dsh-experimental-'
-/** Ordinary directories whose packages this repository publishes: one release member each. */
+/** Pro-only packages distributed as source, excluded from the upstream npm release family. */
+const privateProPackageDirectories = new Set(['packages/web/web-search-model'])
+/** Ordinary directories whose packages the upstream repository publishes. */
 const standardReleaseMemberDirectory = /^(?:packages\/(?!experimental\/)[^/]+\/[^/]+|apps\/(?!desktop(?:-host)?$)[^/]+|vendor\/[^/]+)$/
 /** Installable application assembled by electron-builder rather than published to npm. */
 const desktopApplicationDirectory = 'apps/desktop'
@@ -404,6 +406,13 @@ export function checkWorkspaceManifest({ dir, manifest }: WorkspaceManifest): st
       || manifest.repository.url !== publishedRepositoryUrl
       || manifest.repository.directory !== expectedDirectory) {
       errors.push(`${label}: published Landlock package repository must use ${publishedRepositoryUrl} with directory ${expectedDirectory}`)
+    }
+  } else if (privateProPackageDirectories.has(dir)) {
+    if (manifest.private !== true) {
+      errors.push(`${label}: Pro source-only package must set "private": true`)
+    }
+    if (manifest.publishConfig !== undefined) {
+      errors.push(`${label}: Pro source-only package must not set publishConfig`)
     }
   } else if (isReleaseMemberDirectory(dir)) {
     // Release members state that they are publishable: npm refuses a private

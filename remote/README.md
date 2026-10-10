@@ -22,7 +22,7 @@ curl -fsSL https://raw.githubusercontent.com/JoshuaNibaba/dsh-pro/main/remote/se
 
 In a DSH Pro clone you can run `bash remote/server/install.sh [options]` directly. When run through curl, the script downloads only the files it needs from `remote/server/` on GitHub; the `DSH_REMOTE_REPO=<owner>/<repo>` and `DSH_REMOTE_REF=<branch>` environment variables change the source.
 
-The script installs Node.js 22 and `@deepseek-ai/dsh`, creates the unprivileged user `dsh`, and configures the systemd service `dsh-web` (listening on `127.0.0.1:18790` only). With `--domain` it also:
+The script reuses Node.js matching `^22.19 || >=24`, or installs Node.js 22 when needed, then installs `@deepseek-ai/dsh`, creates the unprivileged user `dsh`, and configures the systemd service `dsh-web` (listening on `127.0.0.1:18790` only). The services use the selected Node installation; its executable and parent directories must be accessible to `dsh`. With `--domain` it also:
 
 - installs the password gateway `dsh-gateway` (`127.0.0.1:18800`) and an nginx site;
 - requests a Let's Encrypt certificate (the domain must resolve directly to the server and port 80 must be reachable); for a domain proxied by Cloudflare with SSL mode Full, use `--tls selfsigned`;
@@ -32,7 +32,7 @@ Common options: `--password NEW` (changes the password and logs out every device
 
 The script copies root's `authorized_keys` to the `dsh` user (`--no-copy-root-keys` turns this off) and grants it sudo only to restart the two services, read their logs, and run `dsh-update`.
 
-To upgrade dsh on the server, run `dsh-update [VERSION]` as root, or `sudo dsh-update [VERSION]` as the `dsh` user; it accepts only an npm version or dist-tag.
+To upgrade dsh on the server, run `dsh-update [VERSION]` as root, or `sudo dsh-update [VERSION]` as the `dsh` user; it accepts only an npm version or dist-tag. A failed native build prints its diagnostics, exits nonzero, and prevents the service restart. The npm installation is not rolled back; fix the reported build failure and rerun the command before restarting. Installation reports ready only after `dsh-web` publishes a fresh URL and, with `--domain`, the gateway answers its loopback health check. On failure, inspect `journalctl -u dsh-web` or `journalctl -u dsh-gateway`.
 
 To run DSH Pro or another self-built dsh, point `~dsh/.dsh-remote/dsh-bin` at its `apps/cli/lib/bin.js` and restart `dsh-web`; deleting the link returns to the npm release. [README](../README.md#deploy-to-a-server) lists the full commands for building DSH Pro on the server and switching to it.
 
@@ -41,6 +41,23 @@ For a domain proxied by Cloudflare, SSL modes Full and Flexible both work (nginx
 > dsh can run any command on the server. When you open web access, use a long password and always use HTTPS. The gateway rate-limits wrong passwords (5 consecutive failures from one IP lock it out for 15 minutes).
 
 When a phone browser adds the page to the home screen, its requests for the icons and manifest carry no login cookie, so the gateway serves these public dsh static files without a login: `/manifest.webmanifest`, `/favicon.svg`, `/favicon-dark.svg`, and `/icons/*.png` (GET/HEAD only). Every other request still needs a login.
+
+<a id="remote-host-settings"></a>
+
+### Authorize remote Host settings
+
+Domain access through `--trusted-host` admits API requests; it does not grant the page access to Host settings such as the model-provider catalog. To grant that access in DSH Pro, edit `/home/dsh/.dsh/profiles/web/cordis.patch.yml` as `dsh` after the first startup. Add or update its `connection` row below, replacing `dsh.example.com:443` with the exact HTTPS domain and port you authorize. Keep other rows and any existing `connection.config` fields; a patch replaces the row's whole `config`, so retain `trustedHosts` as shown.
+
+```yaml
+- id: connection
+  name: '@deepseek-ai/dsh-client-connection'
+  config:
+    trustedHosts: !!js ctx.webRuntime.trustedHosts
+    privilegedHosts:
+      - dsh.example.com:443
+```
+
+Only list domains protected by your browser login. A bare hostname authorizes every port; explicit `:443` limits the grant to that port. Do not copy all `trustedHosts` into `privilegedHosts`. Restart with `sudo systemctl restart dsh-web`, reload the page, and open Settings to verify the model-provider catalog loads. The [remote overlay](server/web.patch.yml) configures only WebSocket heartbeats and grants no Host settings access. Stock npm releases must support `privilegedHosts` for this configuration; use the [DSH Pro deployment](../README.md#deploy-to-a-server) for this fork's implementation.
 
 ## 2. Install the Mac client
 
@@ -71,7 +88,7 @@ How the two modes differ:
 |---|---|---|
 | Setup | Password only | This Mac's SSH key must be trusted by the server |
 | Latency | One more hop through the CDN, nginx, and gateway; the gateway itself adds under 1 ms, and the CDN's effect depends on the route to the nearest edge | Direct to the server |
-| Features | Complete (live messages use a WebSocket; `server/web.patch.yml` makes dsh send a heartbeat every 15 seconds, so CDN idle timeouts do not cut it) | Complete |
+| Features | Host settings require [explicit authorization](#remote-host-settings); live updates use WebSocket with a 15 s heartbeat from `server/web.patch.yml` | Complete |
 | Uploads | At most 100 MB per request through Cloudflare's free plan | Unlimited |
 | Service menu | Needs the SSH server as well | Available |
 
@@ -99,6 +116,7 @@ Run these commands from the root of the DSH Pro repository:
 ```sh
 ./remote/mac/build.sh               # build and install into ~/Applications (macOS only)
 ./remote/mac/build.sh --no-install  # only package remote/mac/build/DSH-Remote.zip
+node --test remote/server/tests/*.test.mjs  # isolated installer/updater mocks (Linux)
 ```
 
 On every push to `main` that changes `remote/mac/`, GitHub Actions ([`.github/workflows/dsh-remote-mac.yml`](../.github/workflows/dsh-remote-mac.yml)) builds on macOS and updates the fixed release `dsh-remote`: it replaces `DSH-Remote.zip` and `DSH-Remote.version`, which records the build number, and moves the tag to the built commit. Each build replaces the assets in that one release, so DSH Pro's own `dsh-pro-v*` releases stay separate. The client's updater reads `DSH-Remote.version` and offers an update when the build number exceeds its own. In a fork, the built client checks for updates in your own repository.

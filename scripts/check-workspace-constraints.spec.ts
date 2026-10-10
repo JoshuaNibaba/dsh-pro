@@ -343,6 +343,28 @@ describe('package payload constraints', () => {
   })
 })
 
+describe('Pro source-only publication policy', () => {
+  const dir = 'packages/web/web-search-model'
+  const manifest = JSON.parse(readFileSync(new URL(`../${dir}/package.json`, import.meta.url), 'utf8')) as WorkspaceManifest['manifest']
+
+  it('accepts the private Pro package', () => {
+    expect(checkWorkspaceManifest({ dir, manifest })).toEqual([])
+  })
+
+  it('rejects making the Pro package publishable', () => {
+    expect(checkWorkspaceManifest({ dir, manifest: { ...manifest, private: false } }))
+      .toContainEqual(expect.stringContaining(`${manifest.name}: Pro source-only package must set "private": true`))
+    expect(checkWorkspaceManifest({ dir, manifest: { ...manifest, publishConfig: { access: 'public' } } }))
+      .toContainEqual(expect.stringContaining(`${manifest.name}: Pro source-only package must not set publishConfig`))
+  })
+
+  it('retains publication requirements for other ordinary packages', () => {
+    const errors = checkWorkspaceManifest({ dir: 'packages/web/another-search', manifest })
+    expect(errors).toContainEqual(expect.stringContaining(`${manifest.name}: release member must not set "private": true`))
+    expect(errors).toContainEqual(expect.stringContaining(`${manifest.name}: release member must set publishConfig.access to "public"`))
+  })
+})
+
 it('publishes CLI runtime declarations and rejects a payload that omits them', () => {
   const manifest = JSON.parse(readFileSync(new URL('../apps/cli/package.json', import.meta.url), 'utf8')) as WorkspaceManifest['manifest']
   expect(checkWorkspaceManifest({ dir: 'apps/cli', manifest })).toEqual([])

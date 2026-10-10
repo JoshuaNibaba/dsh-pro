@@ -117,8 +117,10 @@ interface ClientTransportGlobal {
 /** Browser location fields used to classify loopback authority. */
 export interface ConnectionLocation {
   readonly hostname: string
-  /** Page authority (`hostname[:port]`), matched against privileged authorities. */
+  /** Page authority (`hostname[:port]`); privileged matching requires both host and protocol. */
   readonly host?: string
+  /** Page protocol (`http:` or `https:`), which determines an omitted port. */
+  readonly protocol?: string
 }
 
 /** Instance-local inputs for installing a Connection service. */
@@ -254,7 +256,8 @@ export function installConnection(ctx: Context, options: ConnectionInstallOption
     isLoopback: transport?.ownsHost === true
       || pageLocation === undefined
       || isLoopbackHostname(pageLocation.hostname)
-      || (pageLocation.host !== undefined && matchesAuthority(pageLocation.host, options.privilegedHosts ?? [])),
+      || (pageLocation.host !== undefined && pageLocation.protocol !== undefined
+        && matchesAuthority(pageLocation.host, pageLocation.protocol, options.privilegedHosts ?? [])),
     generation: {
       getSnapshot: () => generation,
       subscribe: (listener) => {

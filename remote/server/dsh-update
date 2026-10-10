@@ -10,14 +10,23 @@ done
 # The dsh user may run this through sudo: accept only an npm version or dist-tag,
 # never a URL, path or git spec that would install other code as root.
 [[ "$VERSION" =~ ^[0-9A-Za-z][0-9A-Za-z.+-]{0,63}$ ]] || { echo "dsh-update: invalid version: $VERSION" >&2; exit 2; }
-export PATH=/usr/local/bin:$PATH
 log="$(mktemp)"
 npm i -g "@deepseek-ai/dsh@$VERSION" --no-fund --no-audit >"$log" 2>&1 || { cat "$log" >&2; rm -f "$log"; exit 1; }
 rm -f "$log"
 B="$(npm root -g)/@deepseek-ai/dsh/node_modules"
-run() { [ -d "$B/$1" ] && (cd "$B/$1" && shift && "$@") >/dev/null 2>&1 || true; }
+run() {
+  local package="$1"
+  shift
+  [ -d "$B/$package" ] || return 0
+  printf 'dsh-update: preparing %s\n' "$package"
+  (cd "$B/$package" && "$@") || {
+    local status=$?
+    printf 'dsh-update: %s failed (exit %s); services were not restarted\n' "$package" "$status" >&2
+    return "$status"
+  }
+}
 run @deepseek-ai/dsh-subprocess-local node scripts/ensure-spawn-helper.mjs
-run node-pty sh -c 'node scripts/prebuild.js || npx -y node-gyp rebuild; node scripts/post-install.js'
+run node-pty sh -c '(node scripts/prebuild.js || npx -y node-gyp rebuild) && node scripts/post-install.js'
 run koffi node ./cnoke.cjs -P . -D src/koffi --prebuild --release
 run protobufjs node scripts/postinstall
 [ "$RESTART" = 1 ] && systemctl restart dsh-web

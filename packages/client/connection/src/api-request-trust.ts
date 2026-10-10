@@ -22,11 +22,11 @@ function header(headers: ConnectionTrustRequest['headers'], name: string): strin
   return typeof value === 'string' ? value : undefined
 }
 
-/** Normalized URL of a Host-header authority (hostname lowercased, default port stripped, IPv6 bracketed), or undefined when unparsable. */
-function parseAuthority(authority: string): URL | undefined {
+/** Normalized authority URL (hostname lowercased, default port stripped, IPv6 bracketed), or undefined when unparsable. */
+function parseAuthority(authority: string, protocol = 'http:'): URL | undefined {
   try {
-    // http: is a WHATWG "special scheme": parsing yields a non-empty hostname or throws.
-    return new URL(`http://${authority}`)
+    // HTTP and HTTPS are WHATWG special schemes: parsing yields a non-empty hostname or throws.
+    return new URL(`${protocol}//${authority}`)
   } catch {
     return undefined
   }
@@ -83,15 +83,25 @@ function isTrustedAuthority(hostUrl: URL, trustedHosts: readonly string[]): bool
 }
 
 /**
- * Whether one page authority matches a configured authority list, with the
- * same exact-port and port-less semantics as `trustedHosts`.
+ * Whether an HTTP(S) page matches a configured authority list. Port-less
+ * entries match any port; explicit ports match the page's effective port,
+ * including HTTP's default 80 and HTTPS's default 443.
  * @param authority - the page authority (`location.host`).
+ * @param protocol - the page protocol (`location.protocol`).
  * @param entries - configured bare authorities.
- * @returns true when an entry matches; false for an unparsable authority.
+ * @returns true when an entry matches; false for an unparsable authority or unsupported protocol.
  */
-export function matchesAuthority(authority: string, entries: readonly string[]): boolean {
-  const hostUrl = parseAuthority(authority)
-  return hostUrl !== undefined && isTrustedAuthority(hostUrl, entries)
+export function matchesAuthority(authority: string, protocol: string, entries: readonly string[]): boolean {
+  if (protocol !== 'http:' && protocol !== 'https:') return false
+  const hostUrl = parseAuthority(authority, protocol)
+  if (hostUrl === undefined) return false
+  const port = hostUrl.port || (protocol === 'https:' ? '443' : '80')
+  return entries.some((entry) => {
+    const entryUrl = parseAuthority(entry)
+    if (entryUrl === undefined || entryUrl.hostname !== hostUrl.hostname) return false
+    const canonical = canonicalAuthority(entry, entryUrl)
+    return canonical === entryUrl.hostname || canonical === `${hostUrl.hostname}:${port}`
+  })
 }
 
 /**

@@ -12,10 +12,11 @@ import {
   type RpcFetch,
   type ConnectionHandle,
   type ConnectionState,
+  type ConnectionLocation,
 } from '../src/client/index.ts'
 
 type Win = {
-  location?: { hostname: string; host?: string; origin?: string }
+  location?: ConnectionLocation & { origin?: string }
   __DSH_TRANSPORT__?: ClientTransportHooks
 }
 
@@ -135,13 +136,40 @@ describe('connection client apply', () => {
   })
 
   it('treats a Host-declared privileged authority as the privileged surface', async () => {
-    ;(globalThis as Win).location = { hostname: 'dsh.example.com', host: 'dsh.example.com' }
+    ;(globalThis as Win).location = new URL('https://dsh.example.com')
     vi.stubGlobal('__DSH_PRIVILEGED_HOSTS__', ['dsh.example.com', 42])
     expect((await mount()).isLoopback).toBe(true)
   })
 
+  it.each([
+    { hostname: 'dsh.example.com', host: 'dsh.example.com' },
+    { hostname: 'dsh.example.com', protocol: 'https:' },
+  ])('keeps an incomplete page location unprivileged: %j', async (pageLocation) => {
+    vi.stubGlobal('location', pageLocation)
+    vi.stubGlobal('__DSH_PRIVILEGED_HOSTS__', ['dsh.example.com'])
+    expect((await mount()).isLoopback).toBe(false)
+  })
+
+  it.each([
+    ['https://dsh.example.com', 'dsh.example.com:443', true],
+    ['https://dsh.example.com', 'dsh.example.com:80', false],
+    ['http://dsh.example.com', 'dsh.example.com:80', true],
+    ['http://dsh.example.com', 'dsh.example.com:443', false],
+    ['https://dsh.example.com:8443', 'dsh.example.com:8443', true],
+    ['https://dsh.example.com:8443', 'dsh.example.com:443', false],
+    ['https://dsh.example.com:80', 'dsh.example.com:80', true],
+    ['http://dsh.example.com:443', 'dsh.example.com:443', true],
+    ['https://dsh.example.com:8443', 'dsh.example.com', true],
+    ['https://[2001:db8::1]', '[2001:db8::1]:443', true],
+    ['https://[2001:db8::1]', '[2001:db8::1]:80', false],
+  ])('matches page %s against privileged entry %s as %s', async (url, entry, expected) => {
+    vi.stubGlobal('location', new URL(url))
+    vi.stubGlobal('__DSH_PRIVILEGED_HOSTS__', [entry])
+    expect((await mount()).isLoopback).toBe(expected)
+  })
+
   it('keeps other remote authorities unprivileged', async () => {
-    ;(globalThis as Win).location = { hostname: 'other.example.com', host: 'other.example.com' }
+    ;(globalThis as Win).location = new URL('https://other.example.com')
     vi.stubGlobal('__DSH_PRIVILEGED_HOSTS__', ['dsh.example.com'])
     expect((await mount()).isLoopback).toBe(false)
     vi.stubGlobal('__DSH_PRIVILEGED_HOSTS__', 'other.example.com')

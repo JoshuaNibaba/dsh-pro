@@ -22,7 +22,7 @@ curl -fsSL https://raw.githubusercontent.com/JoshuaNibaba/dsh-pro/main/remote/se
 
 已经克隆了 DSH Pro 时，也可以直接运行 `bash remote/server/install.sh [选项]`。通过 curl 运行时，脚本只从 GitHub 下载 `remote/server/` 下需要的几个文件；环境变量 `DSH_REMOTE_REPO=<owner>/<repo>` 和 `DSH_REMOTE_REF=<分支>` 可改变下载来源。
 
-脚本会安装 Node.js 22 和 `@deepseek-ai/dsh`,创建无特权用户 `dsh`,配置 systemd 服务 `dsh-web`(只监听 `127.0.0.1:18790`)。加上 `--domain` 时还会:
+脚本会复用满足 `^22.19 || >=24` 的 Node.js，必要时安装 Node.js 22，然后安装 `@deepseek-ai/dsh`、创建无特权用户 `dsh`，并配置 systemd 服务 `dsh-web`（只监听 `127.0.0.1:18790`）。服务使用选定的 Node 安装；`dsh` 必须能访问其可执行文件及父目录。加上 `--domain` 时还会：
 
 - 安装密码网关 `dsh-gateway`(`127.0.0.1:18800`)和 nginx 站点;
 - 用 Let's Encrypt 申请证书(域名需直接解析到服务器且 80 端口可访问);如果域名经 Cloudflare 代理且 SSL 模式为 Full,用 `--tls selfsigned`;
@@ -32,7 +32,7 @@ curl -fsSL https://raw.githubusercontent.com/JoshuaNibaba/dsh-pro/main/remote/se
 
 脚本会把 root 的 `authorized_keys` 复制给 `dsh` 用户(`--no-copy-root-keys` 关闭),并只授予它重启这两个服务、读取它们日志和运行 `dsh-update` 的 sudo 权限。
 
-升级服务器上的 dsh:`dsh-update [版本]`(root),或以 `dsh` 用户运行 `sudo dsh-update [版本]`;版本只接受 npm 版本号或标签。
+升级服务器上的 dsh：以 root 运行 `dsh-update [版本]`，或以 `dsh` 用户运行 `sudo dsh-update [版本]`；版本只接受 npm 版本号或标签。原生构建失败时会打印诊断、以非零状态退出，并阻止服务重启。npm 安装不会回滚；请修复报出的构建错误并重新运行命令，再重启服务。安装器只有在 `dsh-web` 发布新的 URL，且使用 `--domain` 时网关通过回环健康检查后，才报告就绪。失败时查看 `journalctl -u dsh-web` 或 `journalctl -u dsh-gateway`。
 
 运行 DSH Pro 或其他自建的 dsh:让 `~dsh/.dsh-remote/dsh-bin` 指向自建版本的 `apps/cli/lib/bin.js` 并重启 `dsh-web`,删除该链接即回到 npm 版本。在服务器上构建并切换到 DSH Pro 的完整命令见 [README](../README.zh.md#deploy-to-a-server)。
 
@@ -41,6 +41,23 @@ curl -fsSL https://raw.githubusercontent.com/JoshuaNibaba/dsh-pro/main/remote/se
 > dsh 能在服务器上执行任意命令。开放网页访问时请使用足够长的密码,并始终使用 HTTPS。网关对密码错误有限流(同一 IP 连续 5 次错误锁定 15 分钟)。
 
 手机浏览器“添加到主屏幕”时,系统取图标和 manifest 的请求不带登录 cookie,所以网关不需登录就放行 dsh 的这几个公开静态文件:`/manifest.webmanifest`、`/favicon.svg`、`/favicon-dark.svg` 和 `/icons/*.png`(仅 GET/HEAD)。其他请求仍需登录。
+
+<a id="remote-host-settings"></a>
+
+### 授权远程 Host 设置
+
+`--trusted-host` 允许该域名的 API 请求，但不会授予页面访问 Host 设置（如模型提供商目录）的能力。要在 DSH Pro 中授予此能力，请在首次启动后以 `dsh` 用户编辑 `/home/dsh/.dsh/profiles/web/cordis.patch.yml`。添加或更新下面的 `connection` 行，把 `dsh.example.com:443` 换成你明确授权的 HTTPS 域名和端口。保留其他行以及已有的 `connection.config` 字段；补丁会替换该行的整个 `config`，因此需保留示例中的 `trustedHosts`。
+
+```yaml
+- id: connection
+  name: '@deepseek-ai/dsh-client-connection'
+  config:
+    trustedHosts: !!js ctx.webRuntime.trustedHosts
+    privilegedHosts:
+      - dsh.example.com:443
+```
+
+只列出受网页登录保护的域名。不带端口的主机名会授权所有端口；显式写 `:443` 可将授权限定到该端口。不要把全部 `trustedHosts` 复制到 `privilegedHosts`。运行 `sudo systemctl restart dsh-web`，重新加载页面，然后打开设置，验证模型提供商目录能加载。[远程补丁](server/web.patch.yml) 只配置 WebSocket 心跳，不授予 Host 设置访问能力。官方 npm 版本必须支持 `privilegedHosts` 才能使用此配置；本 fork 的实现请使用 [DSH Pro 部署](../README.zh.md#deploy-to-a-server)。
 
 ## 2. 安装 Mac 客户端
 
@@ -71,7 +88,7 @@ ditto -x -k /tmp/DSH-Remote.zip ~/Applications
 |---|---|---|
 | 配置 | 只要密码 | 需要本机 SSH key 被服务器信任 |
 | 延迟 | 多经过一层 CDN / nginx / 网关；网关本身不到 1 ms,CDN 的影响取决于本机到最近节点的线路 | 直连服务器 |
-| 功能 | 完整(实时消息走 WebSocket;`server/web.patch.yml` 让 dsh 每 15 秒发一次心跳，不会被 CDN 的空闲超时断开) | 完整 |
+| 功能 | Host 设置需要[明确授权](#remote-host-settings)；实时消息走 WebSocket，`server/web.patch.yml` 配置 15 秒心跳 | 完整 |
 | 上传 | 经 Cloudflare 免费版时单个请求最大 100 MB | 不限 |
 | 服务菜单 | 需要另外填 SSH 服务器 | 可用 |
 
@@ -99,6 +116,7 @@ Mac 客户端的 SSH 隧道会自动恢复,不需要安装 `autossh`:每 10 秒�
 ```sh
 ./remote/mac/build.sh               # build and install into ~/Applications (macOS only)
 ./remote/mac/build.sh --no-install  # only package remote/mac/build/DSH-Remote.zip
+node --test remote/server/tests/*.test.mjs  # isolated installer/updater mocks (Linux)
 ```
 
 每次推送到 `main` 且修改了 `remote/mac/` 时,GitHub Actions([`.github/workflows/dsh-remote-mac.yml`](../.github/workflows/dsh-remote-mac.yml))在 macOS 上编译，并更新固定的 release `dsh-remote`:替换其中的 `DSH-Remote.zip` 和记录构建号的 `DSH-Remote.version`,标签移到本次提交。每次构建都替换这一个 release 中的文件，与 DSH Pro 自身的 `dsh-pro-v*` 发布互不影响。客户端的自动更新读取 `DSH-Remote.version`,构建号大于本机版本时提示更新。Fork 仓库后，构建出的客户端会从你自己的仓库检查更新。

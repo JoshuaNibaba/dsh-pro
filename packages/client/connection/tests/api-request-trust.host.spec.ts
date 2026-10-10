@@ -4,11 +4,44 @@ import { describe, expect, it } from 'vitest'
 import { assertTrustedAuthority, isTrustedApiRequest, matchesAuthority } from '../src/api-request-trust.ts'
 
 describe('matchesAuthority', () => {
-  it('matches exact-port and port-less entries and refuses unparsable authorities', () => {
-    expect(matchesAuthority('dsh.example.com', ['dsh.example.com'])).toBe(true)
-    expect(matchesAuthority('dsh.example.com:8443', ['dsh.example.com'])).toBe(true)
-    expect(matchesAuthority('dsh.example.com:8443', ['dsh.example.com:443'])).toBe(false)
-    expect(matchesAuthority('[bad', ['dsh.example.com'])).toBe(false)
+  it.each([
+    ['http:', 'dsh.example.com', 'dsh.example.com:80', true],
+    ['http:', 'dsh.example.com:80', 'dsh.example.com:80', true],
+    ['http:', 'dsh.example.com', 'dsh.example.com:443', false],
+    ['https:', 'dsh.example.com', 'dsh.example.com:443', true],
+    ['https:', 'dsh.example.com:443', 'dsh.example.com:443', true],
+    ['https:', 'dsh.example.com', 'dsh.example.com:80', false],
+    ['https:', 'dsh.example.com:80', 'dsh.example.com:80', true],
+    ['http:', 'dsh.example.com:443', 'dsh.example.com:443', true],
+    ['https:', 'dsh.example.com:8443', 'dsh.example.com:8443', true],
+    ['https:', 'dsh.example.com:8443', 'dsh.example.com:443', false],
+    ['http:', 'dsh.example.com:8080', 'dsh.example.com:8080', true],
+    ['http:', 'dsh.example.com:8080', 'dsh.example.com:80', false],
+    ['https:', 'DSH.example.com', 'dsh.EXAMPLE.com:443', true],
+    ['https:', 'dsh.example.com', 'other.example.com:443', false],
+    ['https:', '[2001:db8::1]', '[2001:db8::1]:443', true],
+    ['https:', '[2001:db8::1]', '[2001:db8::1]:80', false],
+    ['http:', '[2001:db8::1]', '[2001:db8::1]:80', true],
+    ['http:', '[2001:db8::1]', '[2001:db8::1]:443', false],
+    ['https:', '[2001:db8::1]:8443', '[2001:db8::1]:8443', true],
+    ['https:', '[2001:db8::1]:8443', '[2001:db8::1]:443', false],
+  ])('matches %s//%s against %s as %s', (protocol, authority, entry, expected) => {
+    expect(matchesAuthority(authority, protocol, [entry])).toBe(expected)
+  })
+
+  it.each(['http:', 'https:'])('matches port-less entries on every %s port', (protocol) => {
+    for (const authority of ['dsh.example.com', 'dsh.example.com:80', 'dsh.example.com:443', 'dsh.example.com:8443']) {
+      expect(matchesAuthority(authority, protocol, ['dsh.example.com'])).toBe(true)
+    }
+    expect(matchesAuthority('[2001:db8::1]:8443', protocol, ['[2001:db8::1]'])).toBe(true)
+  })
+
+  it('refuses unparsable authorities and non-HTTP(S) pages without poisoning later entries', () => {
+    expect(matchesAuthority('[bad', 'https:', ['dsh.example.com'])).toBe(false)
+    expect(matchesAuthority('dsh.example.com', 'https:', ['[bad'])).toBe(false)
+    expect(matchesAuthority('dsh.example.com', 'https:', ['[bad', 'dsh.example.com:443'])).toBe(true)
+    expect(matchesAuthority('dsh.example.com', 'https:', [])).toBe(false)
+    expect(matchesAuthority('dsh.example.com', 'file:', ['dsh.example.com'])).toBe(false)
   })
 })
 
@@ -56,6 +89,13 @@ describe('isTrustedApiRequest', () => {
     // An unparsable entry never matches; it must not poison the rest of the list.
     expect(isTrustedApiRequest(request({ host: 'harness.internal', origin: 'http://harness.internal' }), ['bad entry', 'harness.internal'])).toBe(true)
     expect(isTrustedApiRequest(request({ host: 'harness.internal', origin: 'http://harness.internal' }), ['bad entry'])).toBe(false)
+  })
+
+  it('keeps Host parsing HTTP-based and compares Origin through its own URL normalization', () => {
+    expect(isTrustedApiRequest(request({ host: 'harness.internal', origin: 'https://harness.internal' }), ['harness.internal:80'])).toBe(true)
+    expect(isTrustedApiRequest(request({ host: 'harness.internal', origin: 'https://harness.internal' }), ['harness.internal:443'])).toBe(false)
+    expect(isTrustedApiRequest(request({ host: 'harness.internal:443' }), ['harness.internal:443'])).toBe(true)
+    expect(isTrustedApiRequest(request({ host: 'harness.internal:443', origin: 'https://harness.internal:443' }), ['harness.internal:443'])).toBe(false)
   })
 
   it('refuses cross-origin browser markers even on a loopback Host', () => {

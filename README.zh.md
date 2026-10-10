@@ -44,11 +44,12 @@ DeepSeek Harness 处于 _开发者预览_ 阶段，DSH Pro 跟随其发布，因
 
 ### 从源码运行
 
-需要 Node.js `^22.19` 或 `>=24` 和 git;Node 自带的 corepack 会提供仓库声明的 pnpm 版本。
+需要 Node.js `^22.19` 或 `>=24` 和 git。Corepack 会选择仓库声明的 pnpm 版本；Node.js 25 及之后的版本不再自带 Corepack,缺少时需要先安装。
 
 ```sh
 git clone https://github.com/JoshuaNibaba/dsh-pro.git
 cd dsh-pro
+command -v corepack >/dev/null || npm install --global corepack
 corepack enable
 pnpm install
 pnpm run build
@@ -81,6 +82,7 @@ bash /opt/dsh-pro-src/remote/server/install.sh --domain dsh.example.com
 不想克隆时也可以直接 `curl -fsSL https://raw.githubusercontent.com/JoshuaNibaba/dsh-pro/main/remote/server/install.sh | bash -s -- --domain dsh.example.com`。脚本先装好 npm 上的官方 dsh 并启动服务，最后打印网页地址和生成的访问密码。然后把服务换成 DSH Pro:
 
 ```sh
+command -v corepack >/dev/null || npm install --global corepack
 corepack enable
 sudo -iu dsh
 git clone https://github.com/JoshuaNibaba/dsh-pro.git ~/dsh-pro
@@ -89,7 +91,9 @@ ln -sfn ~/dsh-pro/apps/cli/lib/bin.js ~/.dsh-remote/dsh-bin
 sudo systemctl restart dsh-web
 ```
 
-`corepack enable` 以 root 运行，为所有用户提供 pnpm;其余命令以 `dsh` 用户运行。`~/.dsh-remote/dsh-bin` 存在时服务运行它指向的 dsh;删除该链接并重启即回到 npm 上的官方版本。
+Corepack 配置命令以 root 运行，为所有用户提供 pnpm;其余命令以 `dsh` 用户运行。`~/.dsh-remote/dsh-bin` 存在时服务运行它指向的 dsh;删除该链接并重启即回到 npm 上的官方版本。
+
+通过域名访问时，要显示 Host 设置，需按[远程 Host 设置](remote/README.zh.md#remote-host-settings)将该 HTTPS 域名与端口明确加入 `privilegedHosts`。`--trusted-host` 允许连接，但不会启用这些设置。
 
 Mac 上：从 [Release `dsh-remote`](https://github.com/JoshuaNibaba/dsh-pro/releases/tag/dsh-remote) 下载 `DSH-Remote.zip`,解压后把 `DSH Remote.app` 拖到「应用程序」,第一次右键选择「打开」(应用未经 Apple 公证)。或者用命令行安装:
 
@@ -203,6 +207,8 @@ pnpm run build
 | Release `dsh-remote` | 最新的 Mac 客户端，`remote/mac/` 变化时由 [GitHub Actions](.github/workflows/dsh-remote-mac.yml) 重新编译 |
 
 `git log --no-merges <官方标签>..main` 列出 DSH Pro 的全部改动。
+
+[DSH Pro CI](.github/workflows/dsh-pro-ci.yml)在 GitHub 托管 runner 上检查 `main` 推送、拉取请求和 Pro 发布标签。它运行类型、lint、文档和包约束检查，Linux(Node 22.19 和 24)及 Windows(Node 24)上的 Pro 回归测试，以及构建后的浏览器冒烟测试。`Pro checks passed` 要求所有作业成功。该工作流不发布 npm 包；上游覆盖率和更广泛的平台工作流单独保留。
 
 <a id="compatibility"></a>
 

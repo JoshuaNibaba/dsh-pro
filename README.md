@@ -38,11 +38,12 @@ DeepSeek Harness is in _developer preview_ and DSH Pro follows its releases, so 
 
 ### Run from source
 
-You need Node.js `^22.19` or `>=24` and git; Node's bundled corepack provides the pnpm version the repository declares.
+You need Node.js `^22.19` or `>=24` and git. Corepack selects the pnpm version declared by the repository; Node.js 25 and later do not bundle it, so install it when missing.
 
 ```sh
 git clone https://github.com/JoshuaNibaba/dsh-pro.git
 cd dsh-pro
+command -v corepack >/dev/null || npm install --global corepack
 corepack enable
 pnpm install
 pnpm run build
@@ -73,6 +74,7 @@ bash /opt/dsh-pro-src/remote/server/install.sh --domain dsh.example.com
 Without a clone, `curl -fsSL https://raw.githubusercontent.com/JoshuaNibaba/dsh-pro/main/remote/server/install.sh | bash -s -- --domain dsh.example.com` does the same. The installer first installs and starts the official dsh from npm, then prints the web address and the generated access password. Then switch the service to DSH Pro:
 
 ```sh
+command -v corepack >/dev/null || npm install --global corepack
 corepack enable
 sudo -iu dsh
 git clone https://github.com/JoshuaNibaba/dsh-pro.git ~/dsh-pro
@@ -81,7 +83,9 @@ ln -sfn ~/dsh-pro/apps/cli/lib/bin.js ~/.dsh-remote/dsh-bin
 sudo systemctl restart dsh-web
 ```
 
-`corepack enable` runs as root and provides pnpm for every user; the remaining commands run as the `dsh` user. While `~/.dsh-remote/dsh-bin` exists, the service runs the dsh it points to; remove the link and restart to return to the official npm release.
+The Corepack setup commands run as root and provide pnpm for every user; the remaining commands run as the `dsh` user. While `~/.dsh-remote/dsh-bin` exists, the service runs the dsh it points to; remove the link and restart to return to the official npm release.
+
+To show Host settings when connecting through a domain, explicitly list its HTTPS authority in `privilegedHosts` as described in [Remote Host settings](remote/README.md#remote-host-settings). `--trusted-host` allows connections but does not enable those settings.
 
 On the Mac, download `DSH-Remote.zip` from [release `dsh-remote`](https://github.com/JoshuaNibaba/dsh-pro/releases/tag/dsh-remote), unzip it, and drag `DSH Remote.app` into Applications; the first time, right-click it and choose Open (the app is not notarized by Apple). Or install it from the command line:
 
@@ -187,6 +191,8 @@ Run `pnpm run clean` first when the official base version changed. On a server, 
 | `dsh-remote` release | The latest Mac client, rebuilt by [GitHub Actions](.github/workflows/dsh-remote-mac.yml) whenever `remote/mac/` changes |
 
 `git log --no-merges <official tag>..main` lists every DSH Pro change.
+
+[DSH Pro CI](.github/workflows/dsh-pro-ci.yml) checks `main` pushes, pull requests, and Pro release tags on GitHub-hosted runners. It runs types, lint, documentation and package constraints, Pro regression tests on Linux (Node 22.19 and 24) and Windows (Node 24), and a built-browser smoke test. `Pro checks passed` requires all jobs to succeed. This workflow does not publish npm packages; the upstream coverage and broader platform workflows remain separate.
 
 ## Compatibility
 

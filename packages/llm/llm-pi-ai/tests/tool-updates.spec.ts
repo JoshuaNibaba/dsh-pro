@@ -140,10 +140,10 @@ describe('pi-ai tool update mode', () => {
     expect(body.tools.map(declared => declared.name)).toEqual(['alpha', '__pi_deferred_placeholder__'])
     const toolChange = body.messages.find(message => message.role === 'system'
       && JSON.stringify(message.content).includes('tool_addition'))
-    expect(toolChange?.content).toEqual([expect.objectContaining({
+    expect(toolChange?.content).toMatchObject([{
       type: 'tool_addition',
-      tool: { type: 'tool_definition', definition: expect.objectContaining({ name: 'beta', description: 'beta tool' }) },
-    })])
+      tool: { type: 'tool_definition', definition: { name: 'beta', description: 'beta tool' } },
+    }])
     expect(String(request?.headers['anthropic-beta'])).toContain('inline-tools-2026-09-15')
   })
 })

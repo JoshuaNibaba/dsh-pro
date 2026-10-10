@@ -40,7 +40,7 @@ clientEmulation:
 
 - `packages/client/connection/src/index.ts`：`Config.privilegedHosts`，注入页面全局 `__DSH_PRIVILEGED_HOSTS__`。
 - `packages/client/connection/src/client/index.ts`：`isLoopback` 额外匹配 `privilegedHosts`。
-- `packages/client/connection/src/api-request-trust.ts`：`matchesAuthority`。
+- `packages/client/connection/src/api-request-trust.ts`：`matchesAuthority` 使用页面 `host` 与 `protocol`，省略端口按 HTTP 80 / HTTPS 443 匹配；保持服务端 Host/Origin 信任规则。
 - `packages/client/connection/tsconfig.client.json`：`files` 包含 `src/api-request-trust.ts`。
 - 测试：`tests/client-apply.client.spec.ts`、`tests/node-half.host.spec.ts`、`tests/api-request-trust.host.spec.ts` 中 privileged 相关用例。
 
@@ -54,5 +54,13 @@ clientEmulation:
   config:
     trustedHosts: !!js ctx.webRuntime.trustedHosts
     privilegedHosts:
-      - dsh.aipcloud.xyz
+      - dsh.aipcloud.xyz:443
 ```
+
+## 3. 远程安装和升级
+
+`remote/server/install.sh` 使用实际 Node 可执行路径，接受 `^22.19 || >=24`，并在新 Web URL、Web 服务和网关健康均就绪后报告成功。`remote/server/dsh-update` 传播原生构建失败，失败时不得重启服务；npm 已安装的内容不会自动回滚。运行 `node --test remote/server/tests/*.test.mjs` 检查隔离安装、升级与失败路径。
+
+## 4. Pro 发布约束与 CI
+
+`packages/web/web-search-model` 保持私有且不声明 `publishConfig`；`scripts/check-workspace-constraints.ts` 只为该目录提供 Pro 源码分发例外，其他普通包仍执行上游发布要求。`.github/workflows/dsh-pro-ci.yml` 在 GitHub 托管 runner 检查 `main`、拉取请求和 Pro 标签，`Pro checks passed` 汇总所有作业；上游自定义 runner 工作流单独保留。
