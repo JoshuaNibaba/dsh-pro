@@ -62,7 +62,7 @@ Only list domains protected by your browser login. A bare hostname authorizes ev
 
 ## 2. Install the Mac client
 
-Download `DSH-Remote.zip` from the DSH Pro [release `dsh-remote`](https://github.com/JoshuaNibaba/dsh-pro/releases/tag/dsh-remote), unzip it, and drag `DSH Remote.app` into Applications. The app is not notarized by Apple, so the first time, right-click it and choose Open. Installing from the command line avoids that prompt:
+Download `DSH-Remote.zip` from the DSH Pro [release `dsh-remote`](https://github.com/JoshuaNibaba/dsh-pro/releases/tag/dsh-remote), unzip it, and drag `DSH Remote.app` into Applications. Check the release notes for signing status and the SHA-256 file for download integrity. Until a Developer ID is configured, builds use ad-hoc signing without Apple notarization; if macOS blocks one, verify its source and then use the per-app option in System Settings → Privacy & Security. Formally signed releases include a notarization ticket. Maintainers can follow the [signing setup](signing/README.md). Command-line installation:
 
 ```sh
 curl -fsSL https://github.com/JoshuaNibaba/dsh-pro/releases/download/dsh-remote/DSH-Remote.zip -o /tmp/DSH-Remote.zip
