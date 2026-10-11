@@ -2,9 +2,10 @@
 
 English | [中文](README.zh.md)
 
-Run the [DeepSeek Harness](https://github.com/deepseek-ai/DeepSeek-Harness) Web UI (`dsh web`) on your own server and use it remotely from a Mac client, a browser, or a phone. DSH Remote is a subproject of [DeepSeek Harness Pro](../README.md) and lives in the `remote/` directory of the DSH Pro repository.
+Run the [DeepSeek Harness](https://github.com/deepseek-ai/DeepSeek-Harness) Web UI (`dsh web`) on your own server and use it remotely from a Mac or Windows client, a browser, or a phone. DSH Remote is a subproject of [DeepSeek Harness Pro](../README.md) and lives in the `remote/` directory of the DSH Pro repository.
 
 - **Mac client** (`mac/`): a native macOS app (WKWebView, a few hundred KB). Enter the web address and access password to log in, as in a browser, or open a tunnel with this Mac's SSH key. It updates itself, and its title bar follows the dsh theme (light, dark, or a custom theme).
+- **Windows client** ([`windows/`](windows/README.md)): a native Windows 10/11 x64 app (WinForms + WebView2), with password login, optional SSH, persistent login, reconnect, server controls and update notifications. Download the portable ZIP from [release `dsh-remote-windows`](https://github.com/JoshuaNibaba/dsh-pro/releases/tag/dsh-remote-windows); see the linked Windows guide for prerequisites and installation.
 - **Server** (`server/`): a one-step installer. dsh listens only on the server's 127.0.0.1; optionally a password login gateway and HTTPS in front of it let browsers and phones connect, and a login lasts a long time.
 - **CLI** (`cli/dsh-remote`): an optional terminal tool.
 

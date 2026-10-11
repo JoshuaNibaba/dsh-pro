@@ -1,0 +1,101 @@
+name: DSH Remote (Windows)
+
+on:
+  push:
+    branches: [main]
+    paths: ['remote/windows/**', '.github/workflows/dsh-remote-windows.yml']
+  pull_request:
+    branches: [main]
+    paths: ['remote/windows/**', '.github/workflows/dsh-remote-windows.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dsh-remote-windows-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  DOTNET_NOLOGO: '1'
+  DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+
+jobs:
+  build:
+    runs-on: windows-2022
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Test connection and process lifecycle
+        run: |
+          dotnet run --project remote/windows/Tests/DshRemote.Tests.csproj -c Release
+          if ($LASTEXITCODE -ne 0) { throw 'Connection core tests failed.' }
+      - name: Build portable package and check published executable
+        id: package
+        env:
+          BUILD_NUMBER: ${{ github.run_number }}
+          UPDATE_REPO: ${{ github.repository }}
+        run: ./remote/windows/build.ps1 -BuildNumber $env:BUILD_NUMBER -Repository $env:UPDATE_REPO
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dsh-remote-windows-x64
+          path: |
+            ${{ steps.package.outputs.directory }}/DSH-Remote-Windows-x64.zip
+            ${{ steps.package.outputs.directory }}/DSH-Remote-Windows-x64.zip.sha256
+            ${{ steps.package.outputs.directory }}/DSH-Remote-Windows.version
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: dsh-remote-windows-x64
+          path: remote/build/windows-release
+      - name: Publish Windows rolling release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: dsh-remote-windows
+          BUILD_NUMBER: ${{ github.run_number }}
+        working-directory: remote/build/windows-release
+        run: |
+          set -euo pipefail
+          sha256sum --check DSH-Remote-Windows-x64.zip.sha256
+          previous="$(git ls-remote --tags origin "refs/tags/$RELEASE_TAG" | cut -f1)"
+          git push --force-with-lease="refs/tags/$RELEASE_TAG:$previous" origin "$GITHUB_SHA:refs/tags/$RELEASE_TAG"
+          title="DSH Remote 1.0.$BUILD_NUMBER (Windows 客户端)"
+          cat > release-notes.md <<EOF
+          DSH Remote for Windows 1.0.$BUILD_NUMBER，构建自 $GITHUB_SHA。
+
+          下载 **DSH-Remote-Windows-x64.zip**，完整解压后运行 **DSH Remote.exe**。支持 Windows 10/11 x64，已包含 .NET 运行时，无需安装 .NET SDK。
+
+          - 网页地址与密码登录、保持登录状态；可选 OpenSSH 密钥隧道、断线重连。
+          - 连接设置、服务器日志、重启服务、外部浏览器、主题适配和更新提醒。
+          - 需要 Microsoft Edge WebView2 Runtime；缺少时客户端提供官方下载入口。SSH 模式另需 Windows OpenSSH 客户端。
+          - 此社区便携包未进行 Authenticode 签名，Windows 可能显示未知发布者提示。SHA-256 校验文件随包发布。
+
+          安装、SSH 配置和限制见 [Windows 使用说明](https://github.com/$GITHUB_REPOSITORY/blob/main/remote/windows/README.zh.md)。更新时退出旧客户端，将新版本解压到新目录；连接设置和登录状态保存在当前用户的 AppData 中。
+
+          Windows assets and update checks use this release independently of the Mac release. Built and dependency-checked on Windows; connection/process tests run without browser E2E automation.
+          EOF
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" DSH-Remote-Windows-x64.zip DSH-Remote-Windows-x64.zip.sha256 --clobber
+            gh release upload "$RELEASE_TAG" DSH-Remote-Windows.version --clobber
+            gh release edit "$RELEASE_TAG" --title "$title" --notes-file release-notes.md --latest=false --prerelease=false
+          else
+            gh release create "$RELEASE_TAG" DSH-Remote-Windows-x64.zip DSH-Remote-Windows-x64.zip.sha256 DSH-Remote-Windows.version \
+              --title "$title" --notes-file release-notes.md --latest=false
+          fi
