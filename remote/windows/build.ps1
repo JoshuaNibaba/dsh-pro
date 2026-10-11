@@ -53,5 +53,5 @@ $hash = (Get-FileHash -Path $zip -Algorithm SHA256).Hash.ToLowerInvariant()
 Set-Content -Path (Join-Path $output 'DSH-Remote-Windows-x64.zip.sha256') -Value "$hash  DSH-Remote-Windows-x64.zip`n" -Encoding ascii -NoNewline
 Set-Content -Path (Join-Path $output 'DSH-Remote-Windows.version') -Value $BuildNumber -Encoding ascii
 if ($env:GITHUB_OUTPUT) { "directory=$output" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8 }
-Write-Host "Release 1.0.$BuildNumber: $zip"
+Write-Host "Release 1.0.${BuildNumber}: $zip"
 Write-Host "SHA-256: $hash"
