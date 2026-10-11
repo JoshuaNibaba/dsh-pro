@@ -62,6 +62,7 @@ The [`remote/`](remote/README.md) directory is DSH Remote:
 |---|---|
 | [Server installer](remote/server/install.sh) | Installs Node.js 22 and the `dsh-web` systemd service (listening on `127.0.0.1` only) on Debian/Ubuntu; with `--domain` it also sets up a password login gateway, nginx, and an HTTPS certificate so browsers and phones can connect |
 | Mac client `DSH Remote.app` | Native macOS app: enter the web address and access password, or use an SSH tunnel; updates itself. The built app is in [release `dsh-remote`](https://github.com/JoshuaNibaba/dsh-pro/releases/tag/dsh-remote) |
+| [Windows client](remote/windows/README.md) | Windows 10/11 x64 portable app: web password login or SSH tunnel, persistent login, reconnect and update notifications; download from [release `dsh-remote-windows`](https://github.com/JoshuaNibaba/dsh-pro/releases/tag/dsh-remote-windows) |
 | [`dsh-remote` CLI](remote/cli/dsh-remote) | Optional terminal tool: open a tunnel, read logs, restart the service, update the Mac client |
 
 On the server, as root:

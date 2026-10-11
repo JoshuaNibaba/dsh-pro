@@ -70,6 +70,7 @@ pnpm dsh web
 |---|---|
 | [服务端安装脚本](remote/server/install.sh) | 在 Debian/Ubuntu 上安装 Node.js 22 和 systemd 服务 `dsh-web`(只监听 `127.0.0.1`);加 `--domain` 时再配置密码登录网关、nginx 和 HTTPS 证书，浏览器和手机即可访问 |
 | Mac 客户端 `DSH Remote.app` | 原生 macOS 应用，填网页地址和访问密码即可使用，也可以走 SSH 隧道；支持应用内自动更新。编译好的安装包在 [Release `dsh-remote`](https://github.com/JoshuaNibaba/dsh-pro/releases/tag/dsh-remote) |
+| [Windows 客户端](remote/windows/README.zh.md) | Windows 10/11 x64 便携应用：网页密码登录或 SSH 隧道、保留登录状态、重连和更新提醒；下载见 [Release `dsh-remote-windows`](https://github.com/JoshuaNibaba/dsh-pro/releases/tag/dsh-remote-windows) |
 | [命令行 `dsh-remote`](remote/cli/dsh-remote) | 可选的终端工具：打开隧道、查看日志、重启服务、更新 Mac 客户端 |
 
 服务器上(以 root 运行):

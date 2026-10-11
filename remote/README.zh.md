@@ -2,9 +2,10 @@
 
 [English](README.md) | 中文
 
-在自己的服务器上运行 [DeepSeek Harness](https://github.com/deepseek-ai/DeepSeek-Harness) 的 Web 界面(`dsh web`),然后从 Mac 客户端、浏览器或手机远程使用。DSH Remote 是 [DeepSeek Harness Pro](../README.zh.md) 的子项目，位于 DSH Pro 仓库的 `remote/` 目录。
+在自己的服务器上运行 [DeepSeek Harness](https://github.com/deepseek-ai/DeepSeek-Harness) 的 Web 界面(`dsh web`),然后从 Mac 或 Windows 客户端、浏览器或手机远程使用。DSH Remote 是 [DeepSeek Harness Pro](../README.zh.md) 的子项目，位于 DSH Pro 仓库的 `remote/` 目录。
 
 - **Mac 客户端**(`mac/`):原生 macOS 应用(WKWebView,几百 KB)。填网页地址和访问密码即可登录，和浏览器一样;也可以用本机 SSH key 建立隧道。支持应用内自动更新。标题栏颜色随 dsh 的主题(浅色/深色/自定义主题)变化。
+- **Windows 客户端**([`windows/`](windows/README.zh.md))：原生 Windows 10/11 x64 应用（WinForms + WebView2），支持密码登录、可选 SSH、保留登录状态、重连、服务操作和更新提醒。从 [Release `dsh-remote-windows`](https://github.com/JoshuaNibaba/dsh-pro/releases/tag/dsh-remote-windows) 下载便携 ZIP；依赖和安装步骤见链接中的 Windows 使用说明。
 - **服务端**(`server/`):一键安装脚本。dsh 只监听服务器的 127.0.0.1;可选地在前面加一个密码登录网关和 HTTPS,让浏览器和手机也能访问,登录后长期保持。
 - **命令行**(`cli/dsh-remote`):可选的终端工具。
 
