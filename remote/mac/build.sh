@@ -8,6 +8,7 @@ set -euo pipefail
 cd "$(dirname "$0")"
 INSTALL=1
 [ "${1:-}" = "--no-install" ] && INSTALL=0
+bash ./sign-release.sh --check
 
 BUILD_NUMBER="${BUILD_NUMBER:-0}"
 SHA="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
@@ -33,7 +34,7 @@ cat > "$APP/Contents/Info.plist" <<EOF
   <key>CFBundleExecutable</key><string>DSHRemote</string>
   <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>CFBundlePackageType</key><string>APPL</string>
-  <key>CFBundleShortVersionString</key><string>1.0.${BUILD_NUMBER} (${SHA})</string>
+  <key>CFBundleShortVersionString</key><string>1.0.${BUILD_NUMBER}</string>
   <key>CFBundleVersion</key><string>${BUILD_NUMBER}</string>
   <key>DSHRemoteCommit</key><string>${SHA}</string>
   <key>DSHRemoteUpdateRepo</key><string>${UPDATE_REPO}</string>
@@ -45,7 +46,7 @@ cat > "$APP/Contents/Info.plist" <<EOF
   </dict>
 </dict></plist>
 EOF
-codesign --force --deep -s - "$APP"
+bash ./sign-release.sh "$APP"
 
 if [ "$INSTALL" = 1 ]; then
   mkdir -p ~/Applications

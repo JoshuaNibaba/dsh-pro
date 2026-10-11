@@ -1,34 +1,34 @@
-# Builds DSH Remote.app (remote/mac) on macOS for every main push that touches it
-# and publishes it to the rolling GitHub release `dsh-remote`: DSH-Remote.zip plus
-# DSH-Remote.version (the build number), which the app's updater and
-# remote/cli/dsh-remote read. Build numbers continue the standalone repository's
-# v1.0.19, hence the offset.
+# Asset names remain stable for the app updater and remote/cli/dsh-remote.
 name: DSH Remote (Mac)
 
 on:
   push:
     branches: [main]
     paths: ['remote/mac/**', '.github/workflows/dsh-remote-mac.yml']
+  pull_request:
+    paths: ['remote/mac/**', '.github/workflows/dsh-remote-mac.yml']
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
-  group: dsh-remote-mac
+  group: dsh-remote-mac-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: false
 
 env:
   RELEASE_TAG: dsh-remote
 
 jobs:
-  build:
+  test:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
-      - name: Build number
-        run: echo "BUILD_NUMBER=$(( ${{ github.run_number }} + 19 ))" >> "$GITHUB_ENV"
+      - name: Test signing scripts
+        run: node --test remote/mac/tests/signing*.mjs
 
       - name: Test theme integration
         run: |
@@ -51,33 +51,72 @@ jobs:
           fi
           cat "$RUNNER_TEMP/dsh-ssh-test.log"
 
-      - name: Build
+      - name: Build without release credentials
         env:
           UPDATE_REPO: ${{ github.repository }}
+          REMOTE_MAC_SIGNING_MODE: adhoc
+        run: ./remote/mac/build.sh --no-install
+
+  release:
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: test
+    runs-on: macos-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: dsh-remote-mac-release
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+
+      # Build numbers continue the standalone repository's v1.0.19.
+      - name: Build number
+        run: echo "BUILD_NUMBER=$(( ${{ github.run_number }} + 19 ))" >> "$GITHUB_ENV"
+
+      - name: Build and verify release signature
+        env:
+          UPDATE_REPO: ${{ github.repository }}
+          REMOTE_MAC_SIGNING_MODE: ${{ vars.REMOTE_MAC_SIGNING_MODE }}
+          REMOTE_MAC_SIGNING_IDENTITY: ${{ vars.REMOTE_MAC_SIGNING_IDENTITY }}
+          REMOTE_MAC_TEAM_ID: ${{ vars.REMOTE_MAC_TEAM_ID }}
+          REMOTE_MAC_CERTIFICATE_P12_BASE64: ${{ secrets.REMOTE_MAC_CERTIFICATE_P12_BASE64 }}
+          REMOTE_MAC_CERTIFICATE_PASSWORD: ${{ secrets.REMOTE_MAC_CERTIFICATE_PASSWORD }}
+          REMOTE_MAC_APPLE_ID: ${{ secrets.REMOTE_MAC_APPLE_ID }}
+          REMOTE_MAC_APP_SPECIFIC_PASSWORD: ${{ secrets.REMOTE_MAC_APP_SPECIFIC_PASSWORD }}
         run: |
-          if ! ./remote/mac/build.sh --no-install > "$RUNNER_TEMP/dsh-build.log" 2>&1; then
-            while IFS= read -r line; do echo "::error::$line"; done < "$RUNNER_TEMP/dsh-build.log"
-            exit 1
-          fi
-          cat "$RUNNER_TEMP/dsh-build.log"
+          ./remote/mac/build.sh --no-install
           echo "$BUILD_NUMBER" > remote/mac/build/DSH-Remote.version
+          cd remote/mac/build
+          shasum -a 256 DSH-Remote.zip DSH-Remote.version > DSH-Remote.sha256
 
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
+          REMOTE_MAC_SIGNING_MODE: ${{ vars.REMOTE_MAC_SIGNING_MODE }}
         run: |
           short="$(git rev-parse --short HEAD)"
           title="DSH Remote 1.0.$BUILD_NUMBER (Mac 客户端)"
-          notes="$(printf 'DSH Remote Mac 客户端 1.0.%s,构建自 %s:%s\n\n下载 DSH-Remote.zip,解压后把 DSH Remote.app 拖到「应用程序」。说明见 [remote/README.md](https://github.com/%s/blob/main/remote/README.zh.md)。' \
-            "$BUILD_NUMBER" "$short" "$(git log -1 --format=%s)" "$GITHUB_REPOSITORY")"
-          git tag -f "$RELEASE_TAG" "$GITHUB_SHA"
-          git push origin "+refs/tags/$RELEASE_TAG"
+          notes="$RUNNER_TEMP/dsh-remote-mac-release-notes.md"
+          printf 'DSH Remote Mac 客户端 1.0.%s,构建自 %s。\n\n下载 DSH-Remote.zip,解压后把 DSH Remote.app 拖到「应用程序」。说明见 [remote/README.md](https://github.com/%s/blob/main/remote/README.zh.md)。\n\n' \
+            "$BUILD_NUMBER" "$short" "$GITHUB_REPOSITORY" > "$notes"
+          case "${REMOTE_MAC_SIGNING_MODE:-adhoc}" in
+            developer-id)
+              printf '%s\n' '签名状态：Developer ID Application，已启用 hardened runtime 与安全时间戳，通过 Apple 公证，已 staple 并验证票据，通过 spctl Gatekeeper 验收。ZIP 包含已附加公证票据的 App。首次打开时保留 macOS 的正常安全检查；若被拦截，请核对下载来源与 SHA256 并报告问题。' >> "$notes"
+              ;;
+            adhoc)
+              printf '%s\n' '签名状态：ad-hoc 开发签名，未经 Apple 公证，没有公证票据。Gatekeeper 可能阻止首次打开；仅在确认下载来源和 SHA256 后，按 macOS「系统设置 → 隐私与安全性」中的提示允许打开。无需关闭系统安全检查。' >> "$notes"
+              ;;
+            *) echo 'Invalid Mac signing mode; refusing publication.' >&2; exit 1 ;;
+          esac
+          printf '\n%s\n' '完整性：下载 DSH-Remote.sha256 与 ZIP、version 文件到同一目录，运行 `shasum -a 256 -c DSH-Remote.sha256`。SHA256 校验用于检查下载内容，不替代开发者签名。' >> "$notes"
+          previous="$(git ls-remote --tags origin "refs/tags/$RELEASE_TAG" | cut -f1)"
+          git push --force-with-lease="refs/tags/$RELEASE_TAG:$previous" origin "$GITHUB_SHA:refs/tags/$RELEASE_TAG"
           if gh release view "$RELEASE_TAG" > /dev/null 2>&1; then
             # The zip goes first so a client that sees the new version always finds its zip.
-            gh release upload "$RELEASE_TAG" remote/mac/build/DSH-Remote.zip --clobber
+            gh release upload "$RELEASE_TAG" remote/mac/build/DSH-Remote.zip remote/mac/build/DSH-Remote.sha256 --clobber
             gh release upload "$RELEASE_TAG" remote/mac/build/DSH-Remote.version --clobber
-            gh release edit "$RELEASE_TAG" --title "$title" --notes "$notes" --latest=false --prerelease=false
+            gh release edit "$RELEASE_TAG" --title "$title" --notes-file "$notes" --latest=false --prerelease=false
           else
             gh release create "$RELEASE_TAG" remote/mac/build/DSH-Remote.zip remote/mac/build/DSH-Remote.version \
-              --title "$title" --notes "$notes" --latest=false
+              remote/mac/build/DSH-Remote.sha256 --title "$title" --notes-file "$notes" --latest=false
           fi

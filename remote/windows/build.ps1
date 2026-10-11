@@ -1,6 +1,7 @@
 param(
     [ValidateRange(1, 65534)][int]$BuildNumber = 1,
-    [ValidatePattern('^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$')][string]$Repository = 'JoshuaNibaba/dsh-pro'
+    [ValidatePattern('^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$')][string]$Repository = 'JoshuaNibaba/dsh-pro',
+    [switch]$StageOnly
 )
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
@@ -37,21 +38,9 @@ foreach ($id in $packageIds | Select-Object -Unique) {
     if ($notices.Count -eq 0) { throw "License files missing for $id" }
     $notices | Copy-Item -Destination $destination
 }
-$exe = Join-Path $package 'DSH Remote.exe'
-$check = Start-Process -FilePath $exe -ArgumentList '--self-check' -PassThru
-try {
-    if (-not $check.WaitForExit(30000)) {
-        $check.Kill($true)
-        $check.WaitForExit()
-        throw 'Published executable dependency check timed out.'
-    }
-    if ($check.ExitCode -ne 0) { throw "Published executable dependency check failed: $($check.ExitCode)" }
-} finally { $check.Dispose() }
-$zip = Join-Path $output 'DSH-Remote-Windows-x64.zip'
-Compress-Archive -Path $package -DestinationPath $zip -CompressionLevel Optimal
-$hash = (Get-FileHash -Path $zip -Algorithm SHA256).Hash.ToLowerInvariant()
-Set-Content -Path (Join-Path $output 'DSH-Remote-Windows-x64.zip.sha256') -Value "$hash  DSH-Remote-Windows-x64.zip`n" -Encoding ascii -NoNewline
-Set-Content -Path (Join-Path $output 'DSH-Remote-Windows.version') -Value $BuildNumber -Encoding ascii
-if ($env:GITHUB_OUTPUT) { "directory=$output" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8 }
-Write-Host "Release 1.0.${BuildNumber}: $zip"
-Write-Host "SHA-256: $hash"
+if ($StageOnly) {
+    if ($env:GITHUB_OUTPUT) { "directory=$output" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8 }
+    Write-Host "Staged 1.0.${BuildNumber}: $package"
+} else {
+    & (Join-Path $PSScriptRoot 'pack.ps1') -OutputDirectory $output -BuildNumber $BuildNumber -SigningMode none
+}

@@ -62,7 +62,7 @@ curl -fsSL https://raw.githubusercontent.com/JoshuaNibaba/dsh-pro/main/remote/se
 
 ## 2. 安装 Mac 客户端
 
-从 DSH Pro 的 [Release `dsh-remote`](https://github.com/JoshuaNibaba/dsh-pro/releases/tag/dsh-remote) 下载 `DSH-Remote.zip`,解压后把 `DSH Remote.app` 拖到「应用程序」。应用没有经过 Apple 公证,第一次打开时请右键点击应用并选择「打开」。也可以用命令行安装(不会触发该提示):
+从 DSH Pro 的 [Release `dsh-remote`](https://github.com/JoshuaNibaba/dsh-pro/releases/tag/dsh-remote) 下载 `DSH-Remote.zip`，解压后把 `DSH Remote.app` 拖到「应用程序」。签名状态见发布说明，下载完整性可用 SHA-256 文件核对。配置 Developer ID 之前，构建使用未经 Apple 公证的 ad-hoc 签名；若 macOS 拦截，请先核实来源，再使用「系统设置 → 隐私与安全性」中针对该应用的允许选项。正式签名的发布包含公证票据。维护者可按[签名配置](signing/README.zh.md)接入。命令行安装方式：
 
 ```sh
 curl -fsSL https://github.com/JoshuaNibaba/dsh-pro/releases/download/dsh-remote/DSH-Remote.zip -o /tmp/DSH-Remote.zip

@@ -1,0 +1,34 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write remote/signing/README.md
+/dsh-remote-release-signing:
+  en: b1a792ab8799207c
+  zh: 5e4018f4e7bfaa1c
+/dsh-remote-release-signing/summary:
+  en: b8b2cabe39d333c6
+  zh: 6d35d20b20a18d87
+/dsh-remote-release-signing/table-of-contents:
+  en: 5e8c200effb43523
+  zh: 55edf1448c414e5a
+/dsh-remote-release-signing/accounts-and-costs:
+  en: ec9b92151a21f07f
+  zh: ee78abe2b3b266c1
+/dsh-remote-release-signing/mac-configuration:
+  en: d76584639a42daff
+  zh: 7aa78b3858a401de
+/dsh-remote-release-signing/windows-configuration:
+  en: 3ced9bfff7df086d
+  zh: d19cda6a2a517192
+/dsh-remote-release-signing/windows-configuration/azure-artifact-signing:
+  en: 3e93c889ee7450a1
+  zh: ea635a27a5cf7882
+/dsh-remote-release-signing/windows-configuration/certificate-store-and-hardware-keys:
+  en: 775fa26fb5a033a3
+  zh: 0bfd688a03f0f1a1
+/dsh-remote-release-signing/release-verification:
+  en: 9a6935ed7ff63ad5
+  zh: bb2379b0d81e7504
+/dsh-remote-release-signing/dev-note:
+  en: 5726985c567e95ef
+  zh: c92714f569223114
